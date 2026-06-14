@@ -2,6 +2,18 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+### Supabase Setup
+
+Add these environment variables in `.env.local` before running the admin API routes:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+The database schema lives in `supabase/migrations/20260614061627_initial_tree_management_schema.sql`, and the seed data lives in `supabase/seed.sql`.
+
 First, run the development server:
 
 ```bash
