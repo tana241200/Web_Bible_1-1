@@ -46,29 +46,75 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     }
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    try {
-        const { id } = await context.params;
-        const admin = getSupabaseAdminClient();
-        const body = await readJsonBody<Partial<CourseInput>>(request);
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
 
-        const payload: Record<string, unknown> = {};
-        if (body.code !== undefined) payload.code = requireString(body.code, 'code');
-        if (body.name !== undefined) payload.name = requireString(body.name, 'name');
-        if (body.description !== undefined) payload.description = optionalString(body.description);
-        if (body.orderNo !== undefined) payload.order_no = body.orderNo;
-        if (body.isActive !== undefined) payload.is_active = body.isActive;
+    const admin = getSupabaseAdminClient();
 
-        if (Object.keys(payload).length === 0) {
-            throw new ApiError('No update fields were provided.', 400);
-        }
+    const body =
+      await readJsonBody<Partial<CourseInput>>(request);
 
-        const { data, error } = await admin.from('courses').update(payload).eq('id', requireString(id, 'id')).select('*').single();
-        if (error) throw error;
-        return apiSuccess(mapCourse(data, await loadTrainingCount(admin, data.id)));
-    } catch (error) {
-        return handleError(error);
+    const payload: {
+      code?: string;
+      name?: string;
+      description?: string | null;
+      order_no?: number;
+      is_active?: boolean;
+    } = {};
+
+    if (body.code !== undefined) {
+      payload.code = requireString(body.code, 'code');
     }
+
+    if (body.name !== undefined) {
+      payload.name = requireString(body.name, 'name');
+    }
+
+    if (body.description !== undefined) {
+      payload.description = optionalString(
+        body.description
+      );
+    }
+
+    if (body.orderNo !== undefined) {
+      payload.order_no = body.orderNo;
+    }
+
+    if (body.isActive !== undefined) {
+      payload.is_active = body.isActive;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      throw new ApiError(
+        'No update fields were provided.',
+        400
+      );
+    }
+
+    const { data, error } = await admin
+      .from('courses')
+      .update(payload)
+      .eq('id', requireString(id, 'id'))
+      .select('*')
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return apiSuccess(
+      mapCourse(
+        data,
+        await loadTrainingCount(admin, data.id)
+      )
+    );
+  } catch (error) {
+    return handleError(error);
+  }
 }
 
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {

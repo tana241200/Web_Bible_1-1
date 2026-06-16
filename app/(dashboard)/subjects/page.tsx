@@ -117,13 +117,18 @@ export default function SubjectsPage() {
                 )
             ),
         },
-        {
-            title: 'Trainings',
-            dataIndex: 'totalTrainings',
-            width: 180,
-            render: (value: number) => <Tag variant="outlined">{value.toLocaleString()}</Tag>,
-            sorter: (a: SubjectRecord, b: SubjectRecord) => a.totalTrainings - b.totalTrainings,
-        },
+   {
+  title: 'Trainings',
+  dataIndex: 'totalTrainings',
+  width: 180,
+  render: (value?: number) => (
+    <Tag variant="outlined">
+      {(value ?? 0).toLocaleString()}
+    </Tag>
+  ),
+  sorter: (a: SubjectRecord, b: SubjectRecord) =>
+    (a.totalTrainings ?? 0) - (b.totalTrainings ?? 0),
+},
         {
             title: 'Created',
             dataIndex: 'createdDate',

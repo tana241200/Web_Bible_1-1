@@ -4,7 +4,7 @@ import { apiFailure, apiSuccess } from '@/lib/api/api-response';
 import { ApiError } from '@/lib/api/api-error';
 import { requireString } from '@/lib/api/validation';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
-import type { TreeLinkRecord, TreeMemberRecord, TreeResponse } from '@/types/tree.types';
+import { TreeLinkRecord, TreeMemberRecord, TreeResponse } from '@/types/tree.types';
 
 function handleError(error: unknown) {
     if (error instanceof ApiError) {

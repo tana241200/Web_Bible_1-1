@@ -55,7 +55,7 @@ export default function TrainingRelations() {
     }, [message]);
 
     const mentorOptions = useMemo(
-        () => users.filter((user) => user.role === 'admin' || user.role === 'user').map((user) => ({ value: user.id, label: user.name })),
+        () => users.filter((user) => user.role === 'ADMIN' || user.role === 'MEMBER').map((user) => ({ value: user.id, label: user.name })),
         [users],
     );
 
@@ -147,12 +147,17 @@ export default function TrainingRelations() {
     };
 
     const columns = [
-        {
-            title: 'Mentor',
-            dataIndex: 'mentorName',
-            sorter: (a: RelationRow, b: RelationRow) => a.mentorName.localeCompare(b.mentorName),
-            render: (value: string) => <span className="font-medium text-[#24292f]">{value}</span>,
-        },
+       {
+  title: 'Mentor',
+  dataIndex: 'mentorName',
+  sorter: (a: RelationRow, b: RelationRow) =>
+    (a.mentorName ?? '').localeCompare(b.mentorName ?? ''),
+  render: (value?: string) => (
+    <span className="font-medium text-[#24292f]">
+      {value ?? '-'}
+    </span>
+  ),
+},
         {
             title: 'Disciple',
             dataIndex: 'discipleName',
