@@ -7,18 +7,22 @@ import {
     Tag,
     Button,
     Select,
-    Avatar,
     Drawer,
     Empty,
     message,
     Spin,
     Card,
+    Flex,
+    Space,
+    Divider,
+    Avatar
 } from "antd";
 import {
     BookOutlined,
     CloseOutlined,
     SendOutlined,
     EyeOutlined,
+    
 } from "@ant-design/icons";
 
 import {
@@ -47,11 +51,15 @@ import {
     ChevronDown,
     ChevronUp,
     Users,
+    X,
+    Send,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
 import { AncestorNodeRecord, MemberProfileRecord } from "@/types/member.types";
 import { TreePersonCard } from "@/components/TreePersonCard/TreePersonCard";
+import Title from "antd/es/typography/Title";
+import Text from "antd/es/typography/Text";
 
 const { Header, Content } = Layout;
 const { Option } = Select;
@@ -119,7 +127,7 @@ const T: Record<string, Record<string, string>> = {
         messages: "Messages",
         settings: "Settings",
         selectCourse: "Select course",
-myDiagram: "My Diagram",
+        myDiagram: "My Diagram",
         totalMembers: "Total Members",
         totalMentors: "Mentors",
         totalDisciples: "Disciples",
@@ -271,18 +279,20 @@ function buildTreeForCourse(
     // BFS Level
     const levelMap: Record<string, number> = {};
     const queue = [...rootIds];
-    rootIds.forEach(id => levelMap[id] = 0);
+    rootIds.forEach(id => (levelMap[id] = 0));
     const visited = new Set(rootIds);
 
     while (queue.length) {
         const cur = queue.shift()!;
-        links.filter(l => l.mentorId === cur).forEach(l => {
-            if (!visited.has(l.discipleId)) {
-                visited.add(l.discipleId);
-                levelMap[l.discipleId] = (levelMap[cur] || 0) + 1;
-                queue.push(l.discipleId);
-            }
-        });
+        links
+            .filter(l => l.mentorId === cur)
+            .forEach(l => {
+                if (!visited.has(l.discipleId)) {
+                    visited.add(l.discipleId);
+                    levelMap[l.discipleId] = (levelMap[cur] || 0) + 1;
+                    queue.push(l.discipleId);
+                }
+            });
     }
 
     const byLevel: Record<number, string[]> = {};
@@ -292,19 +302,28 @@ function buildTreeForCourse(
     });
 
     const posMap: Record<string, { x: number; y: number }> = {};
-    const NODE_W = 200, NODE_H = 100, GAP_X = 50, GAP_Y = 120;
+    const NODE_W = 200,
+        NODE_H = 100,
+        GAP_X = 50,
+        GAP_Y = 120;
 
     Object.entries(byLevel).forEach(([lvStr, ids]) => {
         const lv = Number(lvStr);
         const totalW = ids.length * NODE_W + (ids.length - 1) * GAP_X;
         const startX = -totalW / 2;
         ids.forEach((id, i) => {
-            posMap[id] = { x: startX + i * (NODE_W + GAP_X), y: lv * (NODE_H + GAP_Y) };
+            posMap[id] = {
+                x: startX + i * (NODE_W + GAP_X),
+                y: lv * (NODE_H + GAP_Y),
+            };
         });
     });
 
-        const nodes: Node[] = [];
-        const edges: Edge[] = [];
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+
+    // Track added node IDs to prevent duplicates
+    const addedNodeIds = new Set<string>();
 
     // Root Node
     nodes.push({
@@ -313,32 +332,52 @@ function buildTreeForCourse(
         position: { x: -110, y: -160 },
         data: { courseName: "Môn học Kinh Thánh" },
     });
-    const nodeSet = new Set<string>();
+    addedNodeIds.add("root");
 
-    // Mentor Nodes
-    allMentorIds.forEach(id => {
+    // A member can be both a mentor and a disciple (intermediate nodes).
+    // We must render each unique member ID only once, choosing the most
+    // appropriate node type: prefer "mentorNode" when the member mentors
+    // at least one disciple, otherwise fall back to "discipleNode".
+    const mentorSet = new Set(allMentorIds);
+
+    // Collect all unique member IDs across both roles
+    const allMemberIds = new Set([...allMentorIds, ...allDiscipleIds]);
+
+    allMemberIds.forEach(id => {
+        if (addedNodeIds.has(id)) return;
+
         const member = memberMap.get(id);
         const isFocus = focusMemberId === id;
-        nodes.push({
-            id,
-            type: "mentorNode",
-            position: posMap[id] || { x: 0, y: 0 },
-            data: { member, discipleCount: discipleCount[id] || 0, isMentor: true, isFocus },
-        });
+        const isMentor = mentorSet.has(id);
+
+        if (isMentor) {
+            nodes.push({
+                id,
+                type: "mentorNode",
+                position: posMap[id] || { x: 0, y: 0 },
+                data: {
+                    member,
+                    discipleCount: discipleCount[id] || 0,
+                    isMentor: true,
+                    isFocus,
+                },
+            });
+        } else {
+            // Pure disciple — find their link for date info
+            const link = links.find(l => l.discipleId === id);
+            nodes.push({
+                id,
+                type: "discipleNode",
+                position: posMap[id] || { x: 0, y: 0 },
+                data: { member, link, isFocus },
+            });
+        }
+
+        addedNodeIds.add(id);
     });
 
-    // Disciple Nodes + Edges
+    // Edges
     links.forEach(link => {
-        const disciple = memberMap.get(link.discipleId);
-        const isFocus = focusMemberId === link.discipleId;
-
-        nodes.push({
-            id: link.discipleId,
-            type: "discipleNode",
-            position: posMap[link.discipleId] || { x: 0, y: 0 },
-            data: { member: disciple, link, isFocus },
-        });
-
         edges.push({
             id: `e_${link.id}`,
             source: link.mentorId,
@@ -364,43 +403,91 @@ function buildTreeForCourse(
 
 // ==================== CUSTOM NODES ====================
 const RootNode = ({ data }: any) => (
-    <div style={{
-        background: "linear-gradient(135deg,#0F172A,#1E3A5F)",
-        color: "#fff", borderRadius: 12, padding: "10px 22px",
-        fontSize: 13, fontWeight: 700, boxShadow: "0 4px 20px rgba(15,23,42,0.35)",
-        textAlign: "center", minWidth: 200, border: "2px solid #38BDF8",
-    }}>
+    <div
+        style={{
+            background: "linear-gradient(135deg,#0F172A,#1E3A5F)",
+            color: "#fff",
+            borderRadius: 12,
+            padding: "10px 22px",
+            fontSize: 13,
+            fontWeight: 700,
+            boxShadow: "0 4px 20px rgba(15,23,42,0.35)",
+            textAlign: "center",
+            minWidth: 200,
+            border: "2px solid #38BDF8",
+        }}
+    >
         <BookOutlined style={{ marginRight: 6, color: "#38BDF8" }} />
         {data.courseName}
-        <Handle type="source" position={Position.Bottom} style={{ background: "#14B8A6", width: 10, height: 10 }} />
+        <Handle
+            type="source"
+            position={Position.Bottom}
+            style={{ background: "#14B8A6", width: 10, height: 10 }}
+        />
     </div>
 );
 
 const MentorNode = ({ data }: any) => {
     const { member, discipleCount, isFocus } = data;
     return (
-        <div style={{
-            background: isFocus ? "linear-gradient(135deg,#EEF2FF,#E0E7FF)" : "#fff",
-            border: `2px solid ${isFocus ? "#6366F1" : "#C7D2FE"}`,
-            borderRadius: 12, padding: "10px 14px", width: 196,
-            boxShadow: isFocus ? "0 0 0 4px #6366F130, 0 4px 16px rgba(99,102,241,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
-            transition: "all 0.2s", cursor: "pointer",
-        }}>
-            <Handle type="target" position={Position.Top} style={{ background: "#6366F1", width: 9, height: 9 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <Avatar size={32} style={{ background: "linear-gradient(135deg,#6366F1,#8B5CF6)", fontSize: 13, fontWeight: 700 }}>
+        <div
+            style={{
+                background: isFocus
+                    ? "linear-gradient(135deg,#EEF2FF,#E0E7FF)"
+                    : "#fff",
+                border: `2px solid ${isFocus ? "#6366F1" : "#C7D2FE"}`,
+                borderRadius: 12,
+                padding: "10px 14px",
+                width: 196,
+                boxShadow: isFocus
+                    ? "0 0 0 4px #6366F130, 0 4px 16px rgba(99,102,241,0.2)"
+                    : "0 2px 8px rgba(0,0,0,0.08)",
+                transition: "all 0.2s",
+                cursor: "pointer",
+            }}
+        >
+            <Handle
+                type="target"
+                position={Position.Top}
+                style={{ background: "#6366F1", width: 9, height: 9 }}
+            />
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 6,
+                }}
+            >
+                <Avatar
+                    size={32}
+                    style={{
+                        background:
+                            "linear-gradient(135deg,#6366F1,#8B5CF6)",
+                        fontSize: 13,
+                        fontWeight: 700,
+                    }}
+                >
                     {member?.fullName?.[0] || "?"}
                 </Avatar>
                 <div>
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>{member?.fullName}</div>
-                    <div style={{ fontSize: 10, color: "#64748B" }}>{member?.branchName}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700 }}>
+                        {member?.fullName}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#64748B" }}>
+                        {member?.branchName}
+                    </div>
                 </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
                 <Tag color="geekblue">👤 {discipleCount} môn đồ</Tag>
                 <Tag color="purple">Người HD</Tag>
             </div>
-            <Handle type="source" position={Position.Bottom} style={{ background: "#6366F1", width: 9, height: 9 }} />
+            <Handle
+                type="source"
+                position={Position.Bottom}
+                style={{ background: "#6366F1", width: 9, height: 9 }}
+            />
         </div>
     );
 };
@@ -408,32 +495,75 @@ const MentorNode = ({ data }: any) => {
 const DiscipleNode = ({ data }: any) => {
     const { member, link, isFocus } = data;
     return (
-        <div style={{
-            background: isFocus ? "linear-gradient(135deg,#F0FDF4,#DCFCE7)" : "#fff",
-            border: `2px solid ${isFocus ? "#10B981" : "#BBF7D0"}`,
-            borderRadius: 12, padding: "10px 14px", width: 196,
-            boxShadow: isFocus ? "0 0 0 4px #10B98120, 0 4px 16px rgba(16,185,129,0.15)" : "0 2px 8px rgba(0,0,0,0.06)",
-            transition: "all 0.2s", cursor: "pointer",
-        }}>
-            <Handle type="target" position={Position.Top} style={{ background: "#10B981", width: 9, height: 9 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <Avatar size={32} style={{ background: "linear-gradient(135deg,#10B981,#059669)", fontSize: 13, fontWeight: 700 }}>
+        <div
+            style={{
+                background: isFocus
+                    ? "linear-gradient(135deg,#F0FDF4,#DCFCE7)"
+                    : "#fff",
+                border: `2px solid ${isFocus ? "#10B981" : "#BBF7D0"}`,
+                borderRadius: 12,
+                padding: "10px 14px",
+                width: 196,
+                boxShadow: isFocus
+                    ? "0 0 0 4px #10B98120, 0 4px 16px rgba(16,185,129,0.15)"
+                    : "0 2px 8px rgba(0,0,0,0.06)",
+                transition: "all 0.2s",
+                cursor: "pointer",
+            }}
+        >
+            <Handle
+                type="target"
+                position={Position.Top}
+                style={{ background: "#10B981", width: 9, height: 9 }}
+            />
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginBottom: 6,
+                }}
+            >
+                <Avatar
+                    size={32}
+                    style={{
+                        background:
+                            "linear-gradient(135deg,#10B981,#059669)",
+                        fontSize: 13,
+                        fontWeight: 700,
+                    }}
+                >
                     {member?.fullName?.[0] || "?"}
                 </Avatar>
                 <div>
-                    <div style={{ fontSize: 12, fontWeight: 700 }}>{member?.fullName}</div>
-                    <div style={{ fontSize: 10, color: "#64748B" }}>{member?.branchName}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700 }}>
+                        {member?.fullName}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#64748B" }}>
+                        {member?.branchName}
+                    </div>
                 </div>
             </div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 <Tag color="green">Môn đồ</Tag>
                 {link?.startMonth && (
-                    <Tag style={{ fontSize: 9, background: "#F8FAFC", border: "1px solid #E2E8F0", color: "#64748B" }}>
+                    <Tag
+                        style={{
+                            fontSize: 9,
+                            background: "#F8FAFC",
+                            border: "1px solid #E2E8F0",
+                            color: "#64748B",
+                        }}
+                    >
                         {link.startMonth} → {link.endMonth}
                     </Tag>
                 )}
             </div>
-            <Handle type="source" position={Position.Bottom} style={{ background: "#10B981", width: 9, height: 9 }} />
+            <Handle
+                type="source"
+                position={Position.Bottom}
+                style={{ background: "#10B981", width: 9, height: 9 }}
+            />
         </div>
     );
 };
@@ -458,11 +588,11 @@ export default function Diagram() {
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
     const [nodeModalOpen, setNodeModalOpen] = useState(false);
-    const [selectedMemberDetail, setSelectedMemberDetail] = useState<MemberDetailResponse | null>(null);
+    const [selectedMemberDetail, setSelectedMemberDetail] =
+        useState<MemberDetailResponse | null>(null);
     const [messageInput, setMessageInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [drawerLoading, setDrawerLoading] = useState(false);
-
 
     // Load Courses
     useEffect(() => {
@@ -484,14 +614,20 @@ export default function Diagram() {
         const loadTree = async () => {
             setLoading(true);
             try {
-                const url = focusMyself && currentUserId
-                    ? `/api/discipleship-tree?courseId=${selectedCourse}&focusMemberId=${currentUserId}`
-                    : `/api/discipleship-tree?courseId=${selectedCourse}`;
+                const url =
+                    focusMyself && currentUserId
+                        ? `/api/discipleship-tree?courseId=${selectedCourse}&focusMemberId=${currentUserId}`
+                        : `/api/discipleship-tree?courseId=${selectedCourse}`;
 
                 const res = await fetch(url).then(r => r.json());
                 if (res.success && res.data?.links) {
                     const links: Link[] = res.data.links;
-                    const memberMap = new Map<string, MemberProfileRecord>(res.data.members?.map((m: MemberProfileRecord) => [m.id, m]) || []);
+                    const memberMap = new Map<string, MemberProfileRecord>(
+                        res.data.members?.map((m: MemberProfileRecord) => [
+                            m.id,
+                            m,
+                        ]) || []
+                    );
 
                     const { nodes: n, edges: e } = buildTreeForCourse(
                         selectedCourse,
@@ -514,50 +650,60 @@ export default function Diagram() {
     }, [selectedCourse, focusMyself, currentUserId, setNodes, setEdges]);
 
     const loadMemberDetail = async (memberId: string) => {
-    try {
-        setDrawerLoading(true);
-
-       const res = await fetch(`/api/members/${memberId}?courseId=${selectedCourse}`);
-
-        const result = await res.json();
-
-        if (!result.success) {
-            message.error(result.message ?? 'Load member failed');
-            return;
-        }
-
-        setSelectedMemberDetail(result.data);
-        setNodeModalOpen(true);
-    } catch (error) {
-        console.error(error);
-        message.error('Load member failed');
-    } finally {
-        setDrawerLoading(false);
-    }
-};
-
-    // Click Node → Fetch Detail from API
-    const onNodeClick = useCallback(async (_: any, node: Node) => {
-        if (node.id === "root") return;
-
-        setDrawerLoading(true);
-        setNodeModalOpen(true);
-
         try {
-            const res = await fetch(`/api/members/${node.id}?courseId=${selectedCourse}`);
-            const json = await res.json();
+            setDrawerLoading(true);
 
-            if (json.success) {
-                setSelectedMemberDetail(json.data);
-            } else {
-                message.error(json.error?.message || "Không tải được thông tin thành viên");
+            const res = await fetch(
+                `/api/members/${memberId}?courseId=${selectedCourse}`
+            );
+
+            const result = await res.json();
+
+            if (!result.success) {
+                message.error(result.message ?? "Load member failed");
+                return;
             }
-        } catch (err) {
-            message.error("Lỗi kết nối server");
+
+            setSelectedMemberDetail(result.data);
+            setNodeModalOpen(true);
+        } catch (error) {
+            console.error(error);
+            message.error("Load member failed");
         } finally {
             setDrawerLoading(false);
         }
-    }, [selectedCourse]);
+    };
+
+    // Click Node → Fetch Detail from API
+    const onNodeClick = useCallback(
+        async (_: any, node: Node) => {
+            if (node.id === "root") return;
+
+            setDrawerLoading(true);
+            setNodeModalOpen(true);
+
+            try {
+                const res = await fetch(
+                    `/api/members/${node.id}?courseId=${selectedCourse}`
+                );
+                const json = await res.json();
+
+                if (json.success) {
+                    setSelectedMemberDetail(json.data);
+                } else {
+                    message.error(
+                        json.error?.message ||
+                            "Không tải được thông tin thành viên"
+                    );
+                }
+            } catch (err) {
+                message.error("Lỗi kết nối server");
+            } finally {
+                setDrawerLoading(false);
+            }
+        },
+        [selectedCourse]
+    );
 
     const sendMessage = async () => {
         if (!messageInput.trim() || !selectedMemberDetail?.member) return;
@@ -583,7 +729,7 @@ export default function Diagram() {
     return (
         <div style={{ height: "100vh", background: "#f8fafc" }}>
             <Layout style={{ height: "100%" }}>
-                <Header style={{ background: "#fff", padding: "0 24px", borderBottom: "1px solid #ddd", zIndex: 10 }}>
+               
                     <div className="flex items-center gap-4">
                         <Select
                             value={selectedCourse}
@@ -592,7 +738,9 @@ export default function Diagram() {
                             placeholder={t.selectCourse}
                         >
                             {courses.map(c => (
-                                <Option key={c.id} value={c.id}>{c.name}</Option>
+                                <Option key={c.id} value={c.id}>
+                                    {c.name}
+                                </Option>
                             ))}
                         </Select>
 
@@ -604,7 +752,6 @@ export default function Diagram() {
                             {t.myDiagram}
                         </Button>
                     </div>
-                </Header>
 
                 <Content style={{ position: "relative" }}>
                     {loading && (
@@ -625,11 +772,22 @@ export default function Diagram() {
                         minZoom={0.2}
                         maxZoom={2.5}
                     >
-                        <Background variant={BackgroundVariant.Lines} gap={20} color="#f1f5f9" />
+                        <Background
+                            variant={BackgroundVariant.Lines}
+                            gap={20}
+                            color="#f1f5f9"
+                        />
                         <Controls />
                         <MiniMap />
                         <Panel position="top-right">
-                            <div style={{ background: "#fff", padding: "6px 12px", borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+                            <div
+                                style={{
+                                    background: "#fff",
+                                    padding: "6px 12px",
+                                    borderRadius: 8,
+                                    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                                }}
+                            >
                                 💡 {t.dragZoom}
                             </div>
                         </Panel>
@@ -638,436 +796,246 @@ export default function Diagram() {
             </Layout>
 
             {/* ==================== DRAWER ==================== */}
-           <Drawer
-    open={nodeModalOpen}
-    onClose={() => {
-        setNodeModalOpen(false);
-        setSelectedMemberDetail(null);
-    }}
-    placement="right"
-    closable={false}
-    size="large"
-    styles={{
-        body: {
-            padding: 0,
-            background: "#F8FAFC",
-            overflowX: "hidden",
-        },
-    }}
+            <Drawer
+  open={nodeModalOpen}
+  onClose={() => {
+    setNodeModalOpen(false);
+    setSelectedMemberDetail(null);
+  }}
+  placement="right"
+  closable={false}
+  size="large"
 >
-    {drawerLoading ? (
-        <div className="h-full flex items-center justify-center">
-            <Spin size="large" />
-        </div>
-    ) : selectedMemberDetail ? (
-        <div>
-            {/* HEADER */}
-            <div
-                style={{
-                    background:
-                        "linear-gradient(135deg,#4F46E5 0%, #7C3AED 100%)",
-                    padding: 28,
-                    color: "#fff",
-                }}
-            >
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 16,
-                            alignItems: "center",
-                        }}
-                    >
-                        <Avatar
-                            size={72}
-                            style={{
-                                background: "#fff",
-                                color: "#4F46E5",
-                                fontWeight: 800,
-                                fontSize: 24,
-                            }}
-                        >
-                            {selectedMemberDetail.member.fullName?.[0]}
-                        </Avatar>
+  {drawerLoading ? (
+    <Flex
+      justify="center"
+      align="center"
+      style={{ height: "100%" }}
+    >
+      <Spin size="large" />
+    </Flex>
+  ) : selectedMemberDetail ? (
+    <Flex vertical gap={24}>
+      {/* Header */}
 
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: 22,
-                                    fontWeight: 800,
-                                    marginBottom: 4,
-                                }}
-                            >
-                                {selectedMemberDetail.member.fullName}
-                            </div>
+      <Card
+        styles={{
+          body: {
+            background:
+              "linear-gradient(135deg,#4F46E5 0%, #7C3AED 100%)",
+            color: "#fff",
+          },
+        }}
+      >
+        <Flex justify="space-between" align="flex-start">
+          <Space size={16} align="start">
+            <Avatar size={72}>
+              {selectedMemberDetail.member.fullName?.[0]}
+            </Avatar>
 
-                            <div
-                                style={{
-                                    opacity: 0.9,
-                                    fontSize: 13,
-                                }}
-                            >
-                                {selectedMemberDetail.member.branchName}
-                            </div>
+            <Flex vertical gap={4}>
+              <Title
+                level={3}
+                style={{ color: "#fff", margin: 0 }}
+              >
+                {selectedMemberDetail.member.fullName}
+              </Title>
 
-                            <Tag
-                                color="processing"
-                                style={{
-                                    marginTop: 10,
-                                }}
-                            >
-                                {selectedMemberDetail.member.role}
-                            </Tag>
-                        </div>
-                    </div>
+              <Text style={{ color: "#E2E8F0" }}>
+                {selectedMemberDetail.member.branchName}
+              </Text>
 
-                    <Button
-                        type="text"
-                        icon={<CloseOutlined />}
-                        onClick={() => setNodeModalOpen(false)}
-                        style={{
-                            color: "#fff",
-                        }}
-                    />
-                </div>
-            </div>
+              <Tag color="processing">
+                {selectedMemberDetail.member.role}
+              </Tag>
+            </Flex>
+          </Space>
 
-            {/* BODY */}
-            <div
-                style={{
-                    padding: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 20,
-                }}
-            >
-                {/* PROFILE */}
-                <Card
-                    style={{
-                        borderRadius: 20,
-                        border: "none",
-                        boxShadow:
-                            "0 6px 20px rgba(15,23,42,.05)",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: 16,
-                        }}
-                    >
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: 11,
-                                    color: "#94A3B8",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                <Mail size={14} />
-                                Email
-                            </div>
+          <Button
+            type="text"
+            icon={<X size={18} />}
+            onClick={() => setNodeModalOpen(false)}
+          />
+        </Flex>
+      </Card>
 
-                            <div>
-                                {selectedMemberDetail.member.email}
-                            </div>
-                        </div>
+      {/* Profile */}
 
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: 11,
-                                    color: "#94A3B8",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                <Phone size={14} />
-                                Phone
-                            </div>
+      <Card title="Thông tin cá nhân">
+        <Flex vertical gap={20}>
+          <Flex justify="space-between">
+            <Space>
+              <Mail size={16} />
+              <Text strong>Email</Text>
+            </Space>
 
-                            <div>
-                                {selectedMemberDetail.member.phone}
-                            </div>
-                        </div>
+            <Text>
+              {selectedMemberDetail.member.email}
+            </Text>
+          </Flex>
 
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: 11,
-                                    color: "#94A3B8",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                <Calendar size={14} />
-                                Birth Date
-                            </div>
+          <Flex justify="space-between">
+            <Space>
+              <Phone size={16} />
+              <Text strong>Phone</Text>
+            </Space>
 
-                            <div>
-                                {selectedMemberDetail.member.birthDate}
-                            </div>
-                        </div>
+            <Text>
+              {selectedMemberDetail.member.phone}
+            </Text>
+          </Flex>
 
-                        <div>
-                            <div
-                                style={{
-                                    fontSize: 11,
-                                    color: "#94A3B8",
-                                    marginBottom: 4,
-                                }}
-                            >
-                                <Building2 size={14} />
-                                Branch
-                            </div>
+          <Flex justify="space-between">
+            <Space>
+              <Calendar size={16} />
+              <Text strong>Birth Date</Text>
+            </Space>
 
-                            <div>
-                                {selectedMemberDetail.member.branchName}
-                            </div>
-                        </div>
-                    </div>
-                </Card>
+            <Text>
+              {selectedMemberDetail.member.birthDate}
+            </Text>
+          </Flex>
 
-                {/* DISCIPLESHIP TREE */}
-                <Card
-                    title={
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                            }}
-                        >
-                            <Users size={18} />
-                            <span>Cây Môn Đồ</span>
-                        </div>
+          <Flex justify="space-between">
+            <Space>
+              <Building2 size={16} />
+              <Text strong>Branch</Text>
+            </Space>
+
+            <Text>
+              {selectedMemberDetail.member.branchName}
+            </Text>
+          </Flex>
+        </Flex>
+      </Card>
+
+      {/* Tree */}
+
+      <Card
+        title={
+          <Space>
+            <Users size={18} />
+            <span>Cây Môn Đồ</span>
+          </Space>
+        }
+      >
+        <Flex vertical gap={12}>
+          {selectedMemberDetail.ancestors
+            ?.slice()
+            .reverse()
+            .map(item => (
+              <React.Fragment key={item.member.id}>
+                <TreePersonCard
+                  member={item.member}
+                  onClick={() =>
+                    loadMemberDetail(item.member.id)
+                  }
+                />
+
+                <Flex justify="center">
+                  <ChevronDown size={18} />
+                </Flex>
+              </React.Fragment>
+            ))}
+
+          <TreePersonCard
+            member={selectedMemberDetail.member}
+            active
+          />
+
+          {selectedMemberDetail.descendants.length > 0 && (
+            <Flex justify="center">
+              <ChevronDown size={18} />
+            </Flex>
+          )}
+
+          {selectedMemberDetail.descendants.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Chưa có môn đồ"
+            />
+          ) : (
+            <Flex vertical gap={10}>
+              {selectedMemberDetail.descendants.map(
+                item => (
+                  <TreePersonCard
+                    key={item.member.id}
+                    member={item.member}
+                    level={item.level}
+                    onClick={() =>
+                      loadMemberDetail(item.member.id)
                     }
-                    style={{
-                        borderRadius: 20,
-                        border: "none",
-                        boxShadow:
-                            "0 6px 20px rgba(15,23,42,.05)",
-                    }}
+                  />
+                )
+              )}
+            </Flex>
+          )}
+        </Flex>
+      </Card>
+
+      {/* Stats */}
+
+      {selectedMemberDetail.mentorStats.length > 0 && (
+        <Card
+          title={
+            <Space>
+              <GraduationCap size={18} />
+              <span>Thống kê đào tạo</span>
+            </Space>
+          }
+        >
+          <Flex vertical>
+            {selectedMemberDetail.mentorStats.map(
+              (stat, index) => (
+                <React.Fragment
+                  key={stat.courseId}
                 >
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 10,
-                        }}
-                    >
-                        {/* ANCESTORS */}
-                        {selectedMemberDetail.ancestors
-                            ?.slice()
-                            .reverse()
-                            .map((item) => (
-                                <React.Fragment
-                                    key={item.member.id}
-                                >
-                                    <TreePersonCard
-                                        member={item.member}
-                                        onClick={() =>
-                                            loadMemberDetail(
-                                                item.member.id
-                                            )
-                                        }
-                                    />
+                  <Flex
+                    justify="space-between"
+                    align="center"
+                  >
+                    <Text>{stat.courseName}</Text>
 
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            justifyContent:
-                                                "center",
-                                        }}
-                                    >
-                                        <ChevronDown
-                                            size={18}
-                                            color="#94A3B8"
-                                        />
-                                    </div>
-                                </React.Fragment>
-                            ))}
+                    <Tag color="blue">
+                      {stat.totalDisciples}
+                    </Tag>
+                  </Flex>
 
-                        {/* CURRENT */}
-                        <TreePersonCard
-                            member={
-                                selectedMemberDetail.member
-                            }
-                            active
-                        />
+                  {index !==
+                    selectedMemberDetail.mentorStats
+                      .length -
+                      1 && <Divider />}
+                </React.Fragment>
+              )
+            )}
+          </Flex>
+        </Card>
+      )}
 
-                        {/* CONNECTOR */}
-                        {selectedMemberDetail.descendants
-                            .length > 0 && (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    justifyContent:
-                                        "center",
-                                }}
-                            >
-                                <ChevronDown
-                                    size={18}
-                                    color="#22C55E"
-                                />
-                            </div>
-                        )}
+      {/* Message */}
 
-                        {/* DISCIPLES */}
-                        {selectedMemberDetail.descendants
-                            .length === 0 ? (
-                            <Empty
-                                image={
-                                    Empty.PRESENTED_IMAGE_SIMPLE
-                                }
-                                description="Chưa có môn đồ"
-                            />
-                        ) : (
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gap: 10,
-                                }}
-                            >
-                                {selectedMemberDetail.descendants.map(
-                                    (item) => (
-                                        <TreePersonCard
-                                            key={
-                                                item.member.id
-                                            }
-                                            member={
-                                                item.member
-                                            }
-                                            level={
-                                                item.level
-                                            }
-                                            onClick={() =>
-                                                loadMemberDetail(
-                                                    item
-                                                        .member
-                                                        .id
-                                                )
-                                            }
-                                        />
-                                    )
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </Card>
+      <Card title="Thư tín">
+        <Space.Compact block>
+          <Input
+            value={messageInput}
+            onChange={e =>
+              setMessageInput(e.target.value)
+            }
+            onPressEnter={sendMessage}
+            placeholder={t.messagePlaceholder}
+          />
 
-                {/* TRAINING STATS */}
-                {selectedMemberDetail.mentorStats
-                    .length > 0 && (
-                    <Card
-                        title={
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems:
-                                        "center",
-                                    gap: 8,
-                                }}
-                            >
-                                <GraduationCap
-                                    size={18}
-                                />
-                                <span>
-                                    Thống kê đào tạo
-                                </span>
-                            </div>
-                        }
-                        style={{
-                            borderRadius: 20,
-                            border: "none",
-                            boxShadow:
-                                "0 6px 20px rgba(15,23,42,.05)",
-                        }}
-                    >
-                        {selectedMemberDetail.mentorStats.map(
-                            (stat) => (
-                                <div
-                                    key={
-                                        stat.courseId
-                                    }
-                                    style={{
-                                        display:
-                                            "flex",
-                                        justifyContent:
-                                            "space-between",
-                                        alignItems:
-                                            "center",
-                                        padding:
-                                            "10px 0",
-                                        borderBottom:
-                                            "1px solid #F1F5F9",
-                                    }}
-                                >
-                                    <span>
-                                        {
-                                            stat.courseName
-                                        }
-                                    </span>
-
-                                    <Tag color="blue">
-                                        {
-                                            stat.totalDisciples
-                                        }
-                                    </Tag>
-                                </div>
-                            )
-                        )}
-                    </Card>
-                )}
-
-                {/* MESSAGE */}
-                <Card
-                    title="💬 Thư tín"
-                    style={{
-                        borderRadius: 20,
-                        border: "none",
-                        boxShadow:
-                            "0 6px 20px rgba(15,23,42,.05)",
-                    }}
-                >
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                        }}
-                    >
-                        <Input
-                            value={messageInput}
-                            onChange={(e) =>
-                                setMessageInput(
-                                    e.target.value
-                                )
-                            }
-                            onPressEnter={
-                                sendMessage
-                            }
-                            placeholder={
-                                t.messagePlaceholder
-                            }
-                        />
-
-                        <Button
-                            type="primary"
-                            icon={<SendOutlined />}
-                            onClick={sendMessage}
-                        >
-                            {t.send}
-                        </Button>
-                    </div>
-                </Card>
-            </div>
-        </div>
-    ) : null}
+          <Button
+            type="primary"
+            icon={<Send size={16} />}
+            onClick={sendMessage}
+          >
+            {t.send}
+          </Button>
+        </Space.Compact>
+      </Card>
+    </Flex>
+  ) : null}
 </Drawer>
         </div>
     );

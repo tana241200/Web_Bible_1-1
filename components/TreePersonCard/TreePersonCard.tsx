@@ -1,72 +1,67 @@
+'use client';
 
-'use client";'
-import { Avatar, Card, Drawer, Empty, Spin, Tag, Button, Input } from "antd";
-import { MemberProfileRecord } from "@/types/member.types";
+import { Avatar, Card, Flex, Tag, Typography } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
+import { MemberProfileRecord } from '@/types/member.types';
+
+const { Text } = Typography;
+
+type TreePersonCardProps = {
+  member: MemberProfileRecord;
+  active?: boolean;
+  level?: number;
+  onClick?: () => void;
+};
 
 export const TreePersonCard = ({
-    member,
-    active = false,
-    level,
-    onClick,
-}: {
-    member: MemberProfileRecord;
-    active?: boolean;
-    level?: number;
-    onClick?: () => void;
-}) => {
-    return (
-        <div
-            onClick={onClick}
-            style={{
-                cursor: "pointer",
-                borderRadius: 16,
-                padding: 14,
-                background: active ? "#F0FDF4" : "#fff",
-                border: active
-                    ? "2px solid #22C55E"
-                    : "1px solid #E2E8F0",
-                transition: "all .2s",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                boxShadow: active
-                    ? "0 10px 30px rgba(34,197,94,.15)"
-                    : "0 4px 12px rgba(0,0,0,.05)",
-            }}
-        >
-            <Avatar
-                size={44}
-                style={{
-                    background: active ? "#22C55E" : "#6366F1",
-                    flexShrink: 0,
-                }}
-            >
-                {member.fullName?.[0]}
-            </Avatar>
+  member,
+  active = false,
+  level,
+  onClick,
+}: TreePersonCardProps) => {
+  return (
+    <Card
+      hoverable={Boolean(onClick)}
+      size="small"
+      onClick={onClick}
+      className={`
+        rounded-xl
+        transition-all
+        duration-200
+        ${onClick ? 'cursor-pointer' : ''}
+        ${active ? 'border-green-500 bg-green-50' : ''}
+      `}
+      styles={{
+        body: {
+          padding: 12,
+        },
+      }}
+    >
+      <Flex align="center" justify="space-between">
+        <Flex align="center" gap={12}>
+          <Avatar
+            size={44}
+            icon={!member.fullName && <UserOutlined />}
+            className={active ? 'bg-green-500' : 'bg-indigo-500'}
+          >
+            {member.fullName?.[0]}
+          </Avatar>
 
-            <div style={{ flex: 1 }}>
-                <div
-                    style={{
-                        fontWeight: 700,
-                        fontSize: 14,
-                    }}
-                >
-                    {member.fullName}
-                </div>
+          <Flex vertical gap={2}>
+            <Text strong>{member.fullName}</Text>
 
-                <div
-                    style={{
-                        color: "#64748B",
-                        fontSize: 11,
-                    }}
-                >
-                    {member.branchName}
-                </div>
-            </div>
+            <Text type="secondary" className="text-xs">
+              {member.branchName || '-'}
+            </Text>
+          </Flex>
+        </Flex>
 
-            {level !== undefined && (
-                <Tag color="blue">F{level + 1}</Tag>
-            )}
-        </div>
-    );
+        {level !== undefined && (
+          <Tag color="processing">
+            F{level + 1}
+          </Tag>
+        )}
+      </Flex>
+    </Card>
+  );
 };
