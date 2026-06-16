@@ -139,6 +139,22 @@ export default function BranchesPage() {
         );
     }
 };
+
+const loadBranches = async () => {
+  try {
+    const response = await fetch('/api/branches');
+    const payload = await response.json();
+
+    setData(
+      (payload.data ?? []).map((branch: BranchRecord) => ({
+        ...branch,
+        status: branch.isActive ? 'active' : 'inactive',
+      })),
+    );
+  } catch {
+    message.error('Failed to load branches');
+  }
+};
     const columns: ColumnsType<BranchTableRecord> = [
         {
             title: 'Branch',
@@ -238,7 +254,7 @@ export default function BranchesPage() {
 {/* Stats */}
             {/* Filters */}
             {/* Table */}
-            <DataPage<BranchRecord>
+            <DataPage<BranchTableRecord>
                 title="Branches"
                 subtitle="Manage church branches and training centers"
                 breadcrumbs={[

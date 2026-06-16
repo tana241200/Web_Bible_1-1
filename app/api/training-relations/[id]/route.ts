@@ -1,3 +1,5 @@
+
+// training-relations/[id]/route.ts
 import { NextRequest } from 'next/server';
 
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
@@ -5,7 +7,9 @@ import { ApiError } from '@/lib/api/api-error';
 import { optionalString, readJsonBody, requireString } from '@/lib/api/validation';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { TrainingRelationInput, TrainingRelationRecord } from '@/types/training-link.types';
-
+import { Database } from '@/types/database.types';
+type TrainingLinkUpdate =
+  Database['public']['Tables']['training_links']['Update'];
 function mapRelation(row: {
     id: string;
     course_id: string;
@@ -137,7 +141,7 @@ export async function PATCH(
 
         const { data, error } = await admin
             .from('training_links')
-            .update(payload)
+          .update(payload as unknown as TrainingLinkUpdate)
             .eq('id', requireString(id, 'id'))
             .select('*')
             .single();
