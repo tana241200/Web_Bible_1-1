@@ -14,8 +14,10 @@ import {
     App,
     Drawer,
     Table,
+    DatePicker,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { TrainingRelationRecord } from '@/types/training-link.types';
 import type { CourseRecord } from '@/types/course.types';
 import type { UserRecord } from '@/types/user.types';
@@ -24,15 +26,33 @@ const { Title, Text } = Typography;
 
 type RelationRow = TrainingRelationRecord & { key: string };
 
-// Giá trị form khi submit
 interface RelationFormValues {
     courseId: string;
     mentorId: string;
     discipleId: string;
-    startMonth: string;
-    endMonth?: string;
+    startDate: Dayjs;
+    endDate?: Dayjs;
     notes?: string;
     status?: 'in_progress' | 'completed';
+}
+
+/** Chuyển Dayjs → ISO date string "YYYY-MM-DD" để gửi lên API */
+function toDateString(d: Dayjs): string {
+    return d.format('YYYY-MM-DD');
+}
+
+/** Chuyển date string từ API → Dayjs để hiển thị trên DatePicker */
+function toDayjs(value: string | null | undefined): Dayjs | undefined {
+    if (!value) return undefined;
+    const d = dayjs(value);
+    return d.isValid() ? d : undefined;
+}
+
+/** Format ngày hiển thị trong table */
+function formatDate(value: string | null | undefined): string {
+    if (!value) return '-';
+    const d = dayjs(value);
+    return d.isValid() ? d.format('DD/MM/YYYY') : value;
 }
 
 export default function TrainingRelations() {
@@ -74,7 +94,7 @@ export default function TrainingRelations() {
         })();
     }, [message]);
 
-    // ── Select options ─────────────────────────────────────────────────────────
+    // ── Select / Status options ────────────────────────────────────────────────
     const mentorOptions = useMemo(
         () =>
             users
@@ -107,7 +127,6 @@ export default function TrainingRelations() {
     const openCreate = () => {
         setEditingRecord(null);
         form.resetFields();
-        // Default status khi tạo mới
         form.setFieldsValue({ status: 'in_progress' });
         setDrawerOpen(true);
     };
@@ -118,8 +137,9 @@ export default function TrainingRelations() {
             courseId: record.courseId,
             mentorId: record.mentorId,
             discipleId: record.discipleId,
-            startMonth: record.startMonth,
-            endMonth: record.endMonth ?? undefined,
+            // API hiện lưu startMonth / endMonth dạng string — parse sang Dayjs
+            startDate: toDayjs(record.startMonth),
+            endDate: toDayjs(record.endMonth),
             status: record.status ?? 'in_progress',
             notes: record.notes ?? undefined,
         });
@@ -141,11 +161,11 @@ export default function TrainingRelations() {
                 courseId: values.courseId,
                 mentorId: values.mentorId,
                 discipleId: values.discipleId,
-                startMonth: values.startMonth,
-                endMonth: values.endMonth || null,
+                startDate: toDateString(values.startDate),
+                endDate: values.endDate ? toDateString(values.endDate) : null,
                 status: values.status ?? 'in_progress',
                 notes: values.notes || null,
-                createdBy: '00000000-0000-0000-0000-000000000101',
+                createdBy: '00000000-0000-0000-0000-000000000101', // thay bằng auth user thực tế nếu có
             }),
         });
 
@@ -159,9 +179,8 @@ export default function TrainingRelations() {
         message.success('Training relation created');
     };
 
-    // ── Edit (optimistic + PUT) ────────────────────────────────────────────────
+    // ── Edit ──────────────────────────────────────────────────────────────────
     const handleEdit = async (values: RelationFormValues, record: RelationRow) => {
-        // TODO: Implement PUT /api/training-relations/[id] ở phía BE
         const response = await fetch(`/api/training-relations/${record.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -169,19 +188,20 @@ export default function TrainingRelations() {
                 courseId: values.courseId,
                 mentorId: values.mentorId,
                 discipleId: values.discipleId,
-                startMonth: values.startMonth,
-                endMonth: values.endMonth || null,
+                startDate: toDateString(values.startDate),
+                endDate: values.endDate ? toDateString(values.endDate) : null,
                 status: values.status ?? record.status,
                 notes: values.notes || null,
             }),
         });
 
         if (!response.ok) {
-            // Nếu BE chưa có PUT endpoint, fallback cập nhật local
-            // Xóa đoạn này khi BE đã sẵn sàng
+            // Fallback: cập nhật local khi BE chưa có PUT endpoint
             const courseName = courseOptions.find((o) => o.value === values.courseId)?.label;
             const mentorName = mentorOptions.find((o) => o.value === values.mentorId)?.label;
             const discipleName = discipleOptions.find((o) => o.value === values.discipleId)?.label;
+            const startDateStr = toDateString(values.startDate);
+            const endDateStr = values.endDate ? toDateString(values.endDate) : null;
 
             setData((prev) =>
                 prev.map((item) =>
@@ -194,8 +214,8 @@ export default function TrainingRelations() {
                               mentorName,
                               discipleId: values.discipleId,
                               discipleName,
-                              startMonth: values.startMonth,
-                              endMonth: values.endMonth || null,
+                              startMonth: startDateStr,
+                              endMonth: endDateStr,
                               status: values.status ?? item.status,
                               notes: values.notes || null,
                           }
@@ -221,19 +241,16 @@ export default function TrainingRelations() {
         try {
             const values = await form.validateFields();
             setSaving(true);
-
             if (editingRecord) {
                 await handleEdit(values, editingRecord);
             } else {
                 await handleCreate(values);
             }
-
             closeDrawer();
         } catch (error) {
             if (error instanceof Error) {
                 message.error(error.message);
             }
-            // Ant Design validation errors are objects, not Error instances — ignore them silently
         } finally {
             setSaving(false);
         }
@@ -243,7 +260,6 @@ export default function TrainingRelations() {
     const handleDelete = async (id: string) => {
         try {
             // TODO: gọi DELETE /api/training-relations/[id] khi BE sẵn sàng
-            // await fetch(`/api/training-relations/${id}`, { method: 'DELETE' });
             setData((prev) => prev.filter((item) => item.id !== id));
             message.success('Relation deleted');
         } catch {
@@ -251,7 +267,7 @@ export default function TrainingRelations() {
         }
     };
 
-    // ── Columns ────────────────────────────────────────────────────────────────
+    // ── Table columns ──────────────────────────────────────────────────────────
     const columns = [
         {
             title: 'Mentor',
@@ -265,7 +281,9 @@ export default function TrainingRelations() {
         {
             title: 'Disciple',
             dataIndex: 'discipleName',
-            render: (value?: string) => <span className="text-[#24292f]">{value ?? '-'}</span>,
+            render: (value?: string) => (
+                <span className="text-[#24292f]">{value ?? '-'}</span>
+            ),
         },
         {
             title: 'Course',
@@ -282,13 +300,14 @@ export default function TrainingRelations() {
             ),
         },
         {
-            title: 'Start Month',
+            title: 'Start Date',
             dataIndex: 'startMonth',
+            render: (value: string | null) => formatDate(value),
         },
         {
-            title: 'End Month',
+            title: 'End Date',
             dataIndex: 'endMonth',
-            render: (value: string | null) => value ?? '-',
+            render: (value: string | null) => formatDate(value),
         },
         {
             title: 'Status',
@@ -448,30 +467,40 @@ export default function TrainingRelations() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <Form.Item
-                            label="Start Month"
-                            name="startMonth"
-                            rules={[
-                                { required: true, message: 'Please enter start month' },
-                                {
-                                    pattern: /^\d{4}-(0[1-9]|1[0-2])$/,
-                                    message: 'Format must be YYYY-MM (e.g. 2026-06)',
-                                },
-                            ]}
+                            label="Start Date"
+                            name="startDate"
+                            rules={[{ required: true, message: 'Please select a start date' }]}
                         >
-                            <Input placeholder="2026-06" maxLength={7} />
+                            <DatePicker
+                                style={{ width: '100%' }}
+                                format="DD/MM/YYYY"
+                                placeholder="Select start date"
+                            />
                         </Form.Item>
 
                         <Form.Item
-                            label="End Month"
-                            name="endMonth"
+                            label="End Date"
+                            name="endDate"
+                            dependencies={['startDate']}
                             rules={[
-                                {
-                                    pattern: /^\d{4}-(0[1-9]|1[0-2])$/,
-                                    message: 'Format must be YYYY-MM (e.g. 2026-12)',
-                                },
+                                ({ getFieldValue }) => ({
+                                    validator(_, value: Dayjs | undefined) {
+                                        const start: Dayjs | undefined = getFieldValue('startDate');
+                                        if (!value || !start || value.isAfter(start)) {
+                                            return Promise.resolve();
+                                        }
+                                        return Promise.reject(
+                                            new Error('End date must be after start date'),
+                                        );
+                                    },
+                                }),
                             ]}
                         >
-                            <Input placeholder="2026-12 (optional)" maxLength={7} />
+                            <DatePicker
+                                style={{ width: '100%' }}
+                                format="DD/MM/YYYY"
+                                placeholder="Select end date (optional)"
+                            />
                         </Form.Item>
                     </div>
 
