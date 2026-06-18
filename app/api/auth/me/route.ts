@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/jwt';
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
-import type { AuthUser, UserRoleCode } from '@/types/auth.types';
+import type { AuthUser, UserRoleCode } from '@/types/auth';
 
 export async function GET() {
   try {
@@ -44,9 +44,9 @@ export async function GET() {
       return apiFailure('Unauthorized', 401);
     }
 
-    const roleCodes: UserRoleCode[] = (user.user_roles ?? [])
-      .map((ur: { role: { code: UserRoleCode } | null }) => ur.role?.code)
-      .filter((code): code is UserRoleCode => Boolean(code));
+    const roleCodes = (user.user_roles ?? [])
+      .map((ur) => ur.role?.code)
+      .filter((code): code is string => Boolean(code)) as UserRoleCode[];
 
     const response: AuthUser = {
       id: user.id,
