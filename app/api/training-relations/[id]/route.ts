@@ -1,4 +1,3 @@
-
 // training-relations/[id]/route.ts
 import { NextRequest } from 'next/server';
 
@@ -8,8 +7,9 @@ import { optionalString, readJsonBody, requireString } from '@/lib/api/validatio
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { TrainingRelationInput, TrainingRelationRecord } from '@/types/training-link.types';
 import { Database } from '@/types/database.types';
-type TrainingLinkUpdate =
-  Database['public']['Tables']['training_links']['Update'];
+
+type TrainingLinkUpdate = Database['public']['Tables']['training_links']['Update'];
+
 function mapRelation(row: {
     id: string;
     course_id: string;
@@ -39,8 +39,9 @@ function mapRelation(row: {
             const mentorBranchId = refs.branchByUserId.get(row.mentor_id) ?? null;
             return mentorBranchId ? refs.branchNames.get(mentorBranchId) ?? undefined : undefined;
         })(),
-        startMonth: row.start_month,
-        endMonth: row.end_month,
+        // Expose as startDate / endDate — DB columns remain start_month / end_month
+        startDate: row.start_month,
+        endDate: row.end_month,
         status: row.status,
         notes: row.notes,
         createdBy: row.created_by,
@@ -63,20 +64,16 @@ async function loadReferences(admin: ReturnType<typeof getSupabaseAdminClient>) 
         admin.from('courses').select('id, name'),
     ]);
 
-    if (usersResult.error) {
-        throw usersResult.error;
-    }
+    if (usersResult.error) throw usersResult.error;
+    if (branchesResult.error) throw branchesResult.error;
+    if (coursesResult.error) throw coursesResult.error;
 
-    if (branchesResult.error) {
-        throw branchesResult.error;
-    }
-
-    if (coursesResult.error) {
-        throw coursesResult.error;
-    }
-
-    const branchNames = new Map((branchesResult.data ?? []).map((branch) => [branch.id, branch.name]));
-    const branchByUserId = new Map((usersResult.data ?? []).map((user) => [user.id, user.branch_id]));
+    const branchNames = new Map(
+        (branchesResult.data ?? []).map((branch) => [branch.id, branch.name]),
+    );
+    const branchByUserId = new Map(
+        (usersResult.data ?? []).map((user) => [user.id, user.branch_id]),
+    );
 
     return {
         courseNames: new Map((coursesResult.data ?? []).map((course) => [course.id, course.name])),
@@ -94,17 +91,13 @@ export async function GET(
     try {
         const { id } = await context.params;
         const admin = getSupabaseAdminClient();
-        const refs = await loadReferences(admin);
 
-        const { data, error } = await admin
-            .from('training_links')
-            .select('*')
-            .eq('id', requireString(id, 'id'))
-            .single();
+        const [{ data, error }, refs] = await Promise.all([
+            admin.from('training_links').select('*').eq('id', requireString(id, 'id')).single(),
+            loadReferences(admin),
+        ]);
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         return apiSuccess(mapRelation(data, refs));
     } catch (error) {
@@ -122,15 +115,22 @@ export async function PATCH(
         const body = await readJsonBody<Partial<TrainingRelationInput>>(request);
 
         const payload: Record<string, unknown> = {};
-        if (body.courseId !== undefined) payload.course_id = requireString(body.courseId, 'courseId');
-        if (body.mentorId !== undefined) payload.mentor_id = requireString(body.mentorId, 'mentorId');
-        if (body.discipleId !== undefined) payload.disciple_id = requireString(body.discipleId, 'discipleId');
-        if (body.startMonth !== undefined) payload.start_month = requireString(body.startMonth, 'startMonth');
 
-        const endMonth = optionalString(body.endMonth);
+        if (body.courseId !== undefined)
+            payload.course_id = requireString(body.courseId, 'courseId');
+        if (body.mentorId !== undefined)
+            payload.mentor_id = requireString(body.mentorId, 'mentorId');
+        if (body.discipleId !== undefined)
+            payload.disciple_id = requireString(body.discipleId, 'discipleId');
+
+        // Accept startDate / endDate from client; map to DB columns start_month / end_month
+        if (body.startDate !== undefined)
+            payload.start_month = requireString(body.startDate, 'startDate');
+
+        const endDate = optionalString(body.endDate);
         const notes = optionalString(body.notes);
 
-        if (endMonth !== undefined) payload.end_month = endMonth;
+        if (endDate !== undefined) payload.end_month = endDate;
         if (notes !== undefined) payload.notes = notes;
         if (body.status !== undefined) payload.status = body.status;
         if (body.createdBy !== undefined) payload.created_by = body.createdBy;
@@ -141,14 +141,12 @@ export async function PATCH(
 
         const { data, error } = await admin
             .from('training_links')
-          .update(payload as unknown as TrainingLinkUpdate)
+            .update(payload as unknown as TrainingLinkUpdate)
             .eq('id', requireString(id, 'id'))
             .select('*')
             .single();
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         const refs = await loadReferences(admin);
         return apiSuccess(mapRelation(data, refs));
@@ -170,9 +168,7 @@ export async function DELETE(
             .delete()
             .eq('id', requireString(id, 'id'));
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         return apiSuccess({ deleted: true });
     } catch (error) {
