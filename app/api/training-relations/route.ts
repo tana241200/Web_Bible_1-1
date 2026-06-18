@@ -35,8 +35,9 @@ function mapRelation(row: {
             const mentorBranchId = refs.branchByUserId.get(row.mentor_id) ?? null;
             return mentorBranchId ? refs.branchNames.get(mentorBranchId) ?? undefined : undefined;
         })(),
-        startMonth: row.start_month,
-        endMonth: row.end_month,
+        // Expose as startDate / endDate — DB columns remain start_month / end_month
+        startDate: row.start_month,
+        endDate: row.end_month,
         status: row.status,
         notes: row.notes,
         createdBy: row.created_by,
@@ -59,20 +60,16 @@ async function loadReferences(admin: ReturnType<typeof getSupabaseAdminClient>) 
         admin.from('courses').select('id, name'),
     ]);
 
-    if (usersResult.error) {
-        throw usersResult.error;
-    }
+    if (usersResult.error) throw usersResult.error;
+    if (branchesResult.error) throw branchesResult.error;
+    if (coursesResult.error) throw coursesResult.error;
 
-    if (branchesResult.error) {
-        throw branchesResult.error;
-    }
-
-    if (coursesResult.error) {
-        throw coursesResult.error;
-    }
-
-    const branchNames = new Map((branchesResult.data ?? []).map((branch) => [branch.id, branch.name]));
-    const branchByUserId = new Map((usersResult.data ?? []).map((user) => [user.id, user.branch_id]));
+    const branchNames = new Map(
+        (branchesResult.data ?? []).map((branch) => [branch.id, branch.name]),
+    );
+    const branchByUserId = new Map(
+        (usersResult.data ?? []).map((user) => [user.id, user.branch_id]),
+    );
 
     return {
         courseNames: new Map((coursesResult.data ?? []).map((course) => [course.id, course.name])),
@@ -97,18 +94,14 @@ export async function GET(request: NextRequest) {
             loadReferences(admin),
         ]);
 
-        if (relationsResult.error) {
-            throw relationsResult.error;
-        }
+        if (relationsResult.error) throw relationsResult.error;
 
         const filtered = (relationsResult.data ?? []).filter((relation) => {
             if (mentorId && relation.mentor_id !== mentorId) return false;
             if (discipleId && relation.disciple_id !== discipleId) return false;
             if (courseId && relation.course_id !== courseId) return false;
 
-            if (!search) {
-                return true;
-            }
+            if (!search) return true;
 
             const mentorName = refs.mentorNames.get(relation.mentor_id) ?? '';
             const discipleName = refs.discipleNames.get(relation.disciple_id) ?? '';
@@ -136,8 +129,10 @@ export async function POST(request: NextRequest) {
             course_id: requireString(body.courseId, 'courseId'),
             mentor_id: requireString(body.mentorId, 'mentorId'),
             disciple_id: requireString(body.discipleId, 'discipleId'),
-            start_month: requireString(body.startMonth, 'startMonth'),
-            end_month: optionalString(body.endMonth),
+            // Accept startDate from client; map to DB column start_month
+            start_month: requireString(body.startDate, 'startDate'),
+            // Accept endDate from client; map to DB column end_month
+            end_month: optionalString(body.endDate),
             status: body.status ?? 'in_progress',
             notes: optionalString(body.notes),
             created_by: body.createdBy ?? null,
@@ -149,9 +144,7 @@ export async function POST(request: NextRequest) {
             .select('*')
             .single();
 
-        if (error) {
-            throw error;
-        }
+        if (error) throw error;
 
         const refs = await loadReferences(admin);
         return apiSuccess(mapRelation(data, refs), 201);
