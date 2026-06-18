@@ -6,7 +6,7 @@ export type Json =
     | { [key: string]: Json | undefined }
     | Json[];
 
-export type UserRole = 'ADMIN' | 'MEMBER' | 'PRE_REGISTERED_MENTOR';
+export type UserRole = 'ADMIN' | 'MEMBER' | 'MENTOR';
 export type UserStatus = 'active' | 'inactive' | 'pending';
 export type CourseStatus = 'active' | 'inactive';
 export type TrainingLinkStatus = 'in_progress' | 'completed';
@@ -43,6 +43,12 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            // TODO: Bảng "roles" mới xuất hiện trong migration (trigger roles_updated_at
+            // on public.roles) nhưng chưa có CREATE TABLE đầy đủ cho bảng này.
+            // Hãy gửi DDL của bảng roles (các cột, kiểu dữ liệu, FK nếu có) để mình
+            // bổ sung Row/Insert/Update/Relationships chính xác.
+            // Đồng thời cần xác nhận: cột "role" trong "users" có còn dùng enum UserRole
+            // như cũ hay đã chuyển sang role_id tham chiếu bảng roles?
             users: {
                 Row: {
                     id: string;
@@ -200,6 +206,17 @@ export interface Database {
                     },
                 ];
             };
+            // TODO: Migration mới có các index:
+            //   mentor_requests_mentor_idx on public.mentor_requests(mentor_id)
+            //   mentor_requests_course_idx on public.mentor_requests(course_id)
+            // nhưng các cột mentor_id / course_id KHÔNG tồn tại trong cấu trúc hiện tại
+            // của mentor_requests (hiện chỉ có mentor_name, mentor_branch, mentor_birth_date
+            // dạng text, không tham chiếu users/courses).
+            // => Bảng mentor_requests có vẻ đã đổi cấu trúc (có thể mentor_name/mentor_branch
+            // được thay bằng mentor_id uuid FK tới users, và thêm course_id FK tới courses).
+            // Hãy gửi CREATE TABLE đầy đủ của mentor_requests mới để mình cập nhật chính xác
+            // Row/Insert/Update/Relationships. Tạm thời mình GIỮ NGUYÊN cấu trúc cũ dưới đây
+            // để tránh đoán sai kiểu dữ liệu.
             mentor_requests: {
                 Row: {
                     id: string;
@@ -260,59 +277,53 @@ export interface Database {
                     },
                 ];
             };
+            // ĐÃ CẬP NHẬT: conversations đổi member_a/member_b -> user_a_id/user_b_id,
+            // bỏ cột course_id (không còn liên kết tới courses), thêm constraint
+            // conversations_different_users (chỉ là CHECK ở DB, không ảnh hưởng type TS).
             conversations: {
                 Row: {
                     id: string;
-                    course_id: string;
-                    member_a: string;
-                    member_b: string;
+                    user_a_id: string;
+                    user_b_id: string;
                     created_at: string;
                 };
                 Insert: {
                     id?: string;
-                    course_id: string;
-                    member_a: string;
-                    member_b: string;
+                    user_a_id: string;
+                    user_b_id: string;
                     created_at?: string;
                 };
                 Update: {
                     id?: string;
-                    course_id?: string;
-                    member_a?: string;
-                    member_b?: string;
+                    user_a_id?: string;
+                    user_b_id?: string;
                     created_at?: string;
                 };
                 Relationships: [
                     {
-                        foreignKeyName: 'conversations_course_id_fkey';
-                        columns: ['course_id'];
-                        isOneToOne: false;
-                        referencedRelation: 'courses';
-                        referencedColumns: ['id'];
-                    },
-                    {
-                        foreignKeyName: 'conversations_member_a_fkey';
-                        columns: ['member_a'];
+                        foreignKeyName: 'conversations_user_a_id_fkey';
+                        columns: ['user_a_id'];
                         isOneToOne: false;
                         referencedRelation: 'users';
                         referencedColumns: ['id'];
                     },
                     {
-                        foreignKeyName: 'conversations_member_b_fkey';
-                        columns: ['member_b'];
+                        foreignKeyName: 'conversations_user_b_id_fkey';
+                        columns: ['user_b_id'];
                         isOneToOne: false;
                         referencedRelation: 'users';
                         referencedColumns: ['id'];
                     },
                 ];
             };
+            // ĐÃ CẬP NHẬT: messages đổi email_sent -> is_read.
             messages: {
                 Row: {
                     id: string;
                     conversation_id: string;
                     sender_id: string;
                     content: string;
-                    email_sent: boolean;
+                    is_read: boolean;
                     created_at: string;
                 };
                 Insert: {
@@ -320,7 +331,7 @@ export interface Database {
                     conversation_id: string;
                     sender_id: string;
                     content: string;
-                    email_sent?: boolean;
+                    is_read?: boolean;
                     created_at?: string;
                 };
                 Update: {
@@ -328,7 +339,7 @@ export interface Database {
                     conversation_id?: string;
                     sender_id?: string;
                     content?: string;
-                    email_sent?: boolean;
+                    is_read?: boolean;
                     created_at?: string;
                 };
                 Relationships: [
@@ -348,12 +359,14 @@ export interface Database {
                     },
                 ];
             };
+            // ĐÃ CẬP NHẬT: notifications.content giờ là nullable (không có "not null"
+            // trong migration mới), trước đây là required.
             notifications: {
                 Row: {
                     id: string;
                     user_id: string;
                     title: string;
-                    content: string;
+                    content: string | null;
                     is_read: boolean;
                     created_at: string;
                 };
@@ -361,7 +374,7 @@ export interface Database {
                     id?: string;
                     user_id: string;
                     title: string;
-                    content: string;
+                    content?: string | null;
                     is_read?: boolean;
                     created_at?: string;
                 };
@@ -369,7 +382,7 @@ export interface Database {
                     id?: string;
                     user_id?: string;
                     title?: string;
-                    content?: string;
+                    content?: string | null;
                     is_read?: boolean;
                     created_at?: string;
                 };
