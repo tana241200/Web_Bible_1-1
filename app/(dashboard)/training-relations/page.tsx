@@ -119,7 +119,7 @@ export default function TrainingRelations() {
                 startMonth: values.startMonth,
                 endMonth: values.endMonth || null,
                 notes: values.notes || null,
-                createdBy: 'Admin',
+                createdBy: '00000000-0000-0000-0000-000000000101',
             }),
         });
 
