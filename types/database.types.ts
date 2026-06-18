@@ -6,7 +6,11 @@ export type Json =
     | { [key: string]: Json | undefined }
     | Json[];
 
-export type UserRole = 'ADMIN' | 'MEMBER' | 'MENTOR' | 'PRE_REGISTERED_MENTOR;
+// DEPRECATED: cột "role" enum trên bảng users đã bị loại bỏ (insert mới trong seed
+// KHÔNG còn cột "role"), hệ thống đã chuyển sang RBAC quan hệ qua roles/user_roles/
+// permissions/role_permissions. Type này được giữ lại để tránh phá vỡ code cũ còn
+// import UserRole, nhưng không còn map tới enum Postgres nào trong Database.Enums.
+export type UserRole = 'ADMIN' | 'MEMBER' | 'PRE_REGISTERED_MENTOR' | 'MENTOR';
 export type UserStatus = 'active' | 'inactive' | 'pending';
 export type CourseStatus = 'active' | 'inactive';
 export type TrainingLinkStatus = 'in_progress' | 'completed';
@@ -16,9 +20,11 @@ export type UserCourseProgressStatus = 'not_started' | 'in_progress' | 'complete
 export interface Database {
     public: {
         Tables: {
+            // ĐÃ CẬP NHẬT: thêm cột "code" (seed insert branches có code: 'HN', 'DN', 'HCM').
             branches: {
                 Row: {
                     id: string;
+                    code: string;
                     name: string;
                     city: string;
                     is_active: boolean;
@@ -27,6 +33,7 @@ export interface Database {
                 };
                 Insert: {
                     id?: string;
+                    code: string;
                     name: string;
                     city: string;
                     is_active?: boolean;
@@ -35,6 +42,7 @@ export interface Database {
                 };
                 Update: {
                     id?: string;
+                    code?: string;
                     name?: string;
                     city?: string;
                     is_active?: boolean;
@@ -43,12 +51,135 @@ export interface Database {
                 };
                 Relationships: [];
             };
-            // TODO: Bảng "roles" mới xuất hiện trong migration (trigger roles_updated_at
-            // on public.roles) nhưng chưa có CREATE TABLE đầy đủ cho bảng này.
-            // Hãy gửi DDL của bảng roles (các cột, kiểu dữ liệu, FK nếu có) để mình
-            // bổ sung Row/Insert/Update/Relationships chính xác.
-            // Đồng thời cần xác nhận: cột "role" trong "users" có còn dùng enum UserRole
-            // như cũ hay đã chuyển sang role_id tham chiếu bảng roles?
+            // MỚI: bảng roles, cột lấy từ seed insert (id, code, name, description).
+            // created_at/updated_at được giữ vì trigger "roles_updated_at" đã xác nhận
+            // có updated_at; created_at suy theo convention chung của toàn schema.
+            // description đang để nullable (suy luận, chưa có DDL xác nhận not null/nullable).
+            roles: {
+                Row: {
+                    id: string;
+                    code: string;
+                    name: string;
+                    description: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    code: string;
+                    name: string;
+                    description?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    code?: string;
+                    name?: string;
+                    description?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
+            // MỚI: bảng permission_groups, cột lấy từ seed insert (id, code, name).
+            // created_at thêm theo convention chung; KHÔNG có trigger updated_at nào
+            // được khai báo cho bảng này nên không thêm updated_at (cần xác nhận lại).
+            permission_groups: {
+                Row: {
+                    id: string;
+                    code: string;
+                    name: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    code: string;
+                    name: string;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    code?: string;
+                    name?: string;
+                    created_at?: string;
+                };
+                Relationships: [];
+            };
+            // MỚI: bảng permissions, cột lấy từ seed insert
+            // (id, permission_group_id, code, name, module).
+            permissions: {
+                Row: {
+                    id: string;
+                    permission_group_id: string;
+                    code: string;
+                    name: string;
+                    module: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    permission_group_id: string;
+                    code: string;
+                    name: string;
+                    module: string;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    permission_group_id?: string;
+                    code?: string;
+                    name?: string;
+                    module?: string;
+                    created_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'permissions_permission_group_id_fkey';
+                        columns: ['permission_group_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'permission_groups';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            // MỚI: bảng nối role_permissions, seed insert chỉ có (role_id, permission_id),
+            // không có cột "id" => suy luận đây là composite primary key (role_id, permission_id).
+            role_permissions: {
+                Row: {
+                    role_id: string;
+                    permission_id: string;
+                    created_at: string;
+                };
+                Insert: {
+                    role_id: string;
+                    permission_id: string;
+                    created_at?: string;
+                };
+                Update: {
+                    role_id?: string;
+                    permission_id?: string;
+                    created_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'role_permissions_role_id_fkey';
+                        columns: ['role_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'roles';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'role_permissions_permission_id_fkey';
+                        columns: ['permission_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'permissions';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            // ĐÃ CẬP NHẬT: bỏ hẳn cột "role" (enum UserRole) — seed insert users mới
+            // KHÔNG còn cột này. Phân quyền chuyển sang bảng user_roles.
             users: {
                 Row: {
                     id: string;
@@ -57,7 +188,6 @@ export interface Database {
                     full_name: string;
                     birth_date: string | null;
                     branch_id: string | null;
-                    role: UserRole;
                     status: UserStatus;
                     avatar_url: string | null;
                     phone: string | null;
@@ -71,7 +201,6 @@ export interface Database {
                     full_name: string;
                     birth_date?: string | null;
                     branch_id?: string | null;
-                    role?: UserRole;
                     status?: UserStatus;
                     avatar_url?: string | null;
                     phone?: string | null;
@@ -85,7 +214,6 @@ export interface Database {
                     full_name?: string;
                     birth_date?: string | null;
                     branch_id?: string | null;
-                    role?: UserRole;
                     status?: UserStatus;
                     avatar_url?: string | null;
                     phone?: string | null;
@@ -98,6 +226,41 @@ export interface Database {
                         columns: ['branch_id'];
                         isOneToOne: false;
                         referencedRelation: 'branches';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            // MỚI: bảng nối user_roles, seed insert chỉ có (user_id, role_id),
+            // không có cột "id" => composite primary key (user_id, role_id).
+            user_roles: {
+                Row: {
+                    user_id: string;
+                    role_id: string;
+                    created_at: string;
+                };
+                Insert: {
+                    user_id: string;
+                    role_id: string;
+                    created_at?: string;
+                };
+                Update: {
+                    user_id?: string;
+                    role_id?: string;
+                    created_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'user_roles_user_id_fkey';
+                        columns: ['user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'user_roles_role_id_fkey';
+                        columns: ['role_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'roles';
                         referencedColumns: ['id'];
                     },
                 ];
@@ -135,14 +298,16 @@ export interface Database {
                 };
                 Relationships: [];
             };
+            // ĐÃ CẬP NHẬT: seed insert dùng start_date/end_date (giá trị dạng ngày đầy đủ,
+            // ví dụ '2022-01-01') thay cho start_month/end_month trước đây.
             training_links: {
                 Row: {
                     id: string;
                     course_id: string;
                     mentor_id: string;
                     disciple_id: string;
-                    start_month: string;
-                    end_month: string | null;
+                    start_date: string;
+                    end_date: string | null;
                     status: TrainingLinkStatus;
                     notes: string | null;
                     created_by: string | null;
@@ -154,8 +319,8 @@ export interface Database {
                     course_id: string;
                     mentor_id: string;
                     disciple_id: string;
-                    start_month: string;
-                    end_month?: string | null;
+                    start_date: string;
+                    end_date?: string | null;
                     status?: TrainingLinkStatus;
                     notes?: string | null;
                     created_by?: string | null;
@@ -167,8 +332,8 @@ export interface Database {
                     course_id?: string;
                     mentor_id?: string;
                     disciple_id?: string;
-                    start_month?: string;
-                    end_month?: string | null;
+                    start_date?: string;
+                    end_date?: string | null;
                     status?: TrainingLinkStatus;
                     notes?: string | null;
                     created_by?: string | null;
@@ -206,21 +371,15 @@ export interface Database {
                     },
                 ];
             };
-            // TODO: Migration mới có các index:
-            //   mentor_requests_mentor_idx on public.mentor_requests(mentor_id)
-            //   mentor_requests_course_idx on public.mentor_requests(course_id)
-            // nhưng các cột mentor_id / course_id KHÔNG tồn tại trong cấu trúc hiện tại
-            // của mentor_requests (hiện chỉ có mentor_name, mentor_branch, mentor_birth_date
-            // dạng text, không tham chiếu users/courses).
-            // => Bảng mentor_requests có vẻ đã đổi cấu trúc (có thể mentor_name/mentor_branch
-            // được thay bằng mentor_id uuid FK tới users, và thêm course_id FK tới courses).
-            // Hãy gửi CREATE TABLE đầy đủ của mentor_requests mới để mình cập nhật chính xác
-            // Row/Insert/Update/Relationships. Tạm thời mình GIỮ NGUYÊN cấu trúc cũ dưới đây
-            // để tránh đoán sai kiểu dữ liệu.
+            // CHƯA CÓ THÊM THÔNG TIN MỚI: seed truncate có mentor_requests nhưng không
+            // insert dữ liệu mẫu, nên giữ nguyên cấu trúc suy luận từ trước (mentor_id,
+            // course_id thêm dựa trên index, vẫn cần DDL gốc để xác nhận 100%).
             mentor_requests: {
                 Row: {
                     id: string;
                     requester_id: string | null;
+                    mentor_id: string | null;
+                    course_id: string | null;
                     mentor_name: string;
                     mentor_branch: string;
                     mentor_birth_date: string | null;
@@ -235,6 +394,8 @@ export interface Database {
                 Insert: {
                     id?: string;
                     requester_id?: string | null;
+                    mentor_id?: string | null;
+                    course_id?: string | null;
                     mentor_name: string;
                     mentor_branch: string;
                     mentor_birth_date?: string | null;
@@ -249,6 +410,8 @@ export interface Database {
                 Update: {
                     id?: string;
                     requester_id?: string | null;
+                    mentor_id?: string | null;
+                    course_id?: string | null;
                     mentor_name?: string;
                     mentor_branch?: string;
                     mentor_birth_date?: string | null;
@@ -269,6 +432,20 @@ export interface Database {
                         referencedColumns: ['id'];
                     },
                     {
+                        foreignKeyName: 'mentor_requests_mentor_id_fkey';
+                        columns: ['mentor_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'mentor_requests_course_id_fkey';
+                        columns: ['course_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'courses';
+                        referencedColumns: ['id'];
+                    },
+                    {
                         foreignKeyName: 'mentor_requests_reviewed_by_fkey';
                         columns: ['reviewed_by'];
                         isOneToOne: false;
@@ -277,9 +454,6 @@ export interface Database {
                     },
                 ];
             };
-            // ĐÃ CẬP NHẬT: conversations đổi member_a/member_b -> user_a_id/user_b_id,
-            // bỏ cột course_id (không còn liên kết tới courses), thêm constraint
-            // conversations_different_users (chỉ là CHECK ở DB, không ảnh hưởng type TS).
             conversations: {
                 Row: {
                     id: string;
@@ -316,7 +490,6 @@ export interface Database {
                     },
                 ];
             };
-            // ĐÃ CẬP NHẬT: messages đổi email_sent -> is_read.
             messages: {
                 Row: {
                     id: string;
@@ -359,8 +532,6 @@ export interface Database {
                     },
                 ];
             };
-            // ĐÃ CẬP NHẬT: notifications.content giờ là nullable (không có "not null"
-            // trong migration mới), trước đây là required.
             notifications: {
                 Row: {
                     id: string;
@@ -516,8 +687,9 @@ export interface Database {
             };
         };
         Functions: Record<string, never>;
+        // ĐÃ BỎ "user_role" khỏi Enums vì cột users.role (enum) không còn tồn tại;
+        // hệ thống chuyển sang RBAC quan hệ (roles/user_roles/permissions/role_permissions).
         Enums: {
-            user_role: UserRole;
             user_status: UserStatus;
             course_status: CourseStatus;
             training_link_status: TrainingLinkStatus;
