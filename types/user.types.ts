@@ -1,4 +1,4 @@
-import type { UserRole, UserStatus } from '@/types/database.types';
+import type { RoleCode } from '@/types/auth.types';
 
 export interface UserRecord {
     id: string;
@@ -7,8 +7,8 @@ export interface UserRecord {
     branchId: string | null;
     branchName?: string | null;
     email: string;
-    role: UserRole;
-    status: UserStatus;
+    roles: RoleCode[];
+    status: string;
     avatar: string | null;
     phone?: string | null;
 }
@@ -19,8 +19,8 @@ export interface UserInput {
     branchId?: string | null;
     email: string;
     passwordHash?: string;
-    role?: UserRole;
-    status?: UserStatus;
+    roles?: RoleCode[];
+    status?: string;
     avatar?: string | null;
     phone?: string | null;
 }
