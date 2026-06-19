@@ -1,8 +1,7 @@
 export type { Database } from '@/types/database.types';
 export type {
-    UserRole,
+    RoleCode,
     UserStatus,
-    CourseStatus,
     TrainingLinkStatus,
     MentorRequestStatus,
     UserCourseProgressStatus,
