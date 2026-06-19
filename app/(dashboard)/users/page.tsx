@@ -26,7 +26,7 @@ import {
 } from '@ant-design/icons';
 
 import type { UserRecord } from '@/types/user.types';
-import type { BranchRecord } from '@/types/branch.types';
+import type { RoleCode } from '@/types/auth.types';
 
 const { Title, Text } = Typography;
 
@@ -39,107 +39,110 @@ interface BranchOption {
     label: string;
 }
 
+const ROLE_OPTIONS: { value: RoleCode; label: string }[] = [
+    { value: 'ADMIN', label: 'Admin' },
+    { value: 'MENTOR', label: 'Mentor' },
+    { value: 'MEMBER', label: 'Member' },
+];
+
 export default function UsersPage() {
     const { message, modal } = App.useApp();
 
-    const role = 'admin';
+    // TODO: wire this up to the authenticated user (see lib/auth/get-current-user.ts)
+    // once a client-side auth/session hook is available.
+    const currentUserRoles: RoleCode[] = ['ADMIN'];
 
     const [data, setData] = useState<UserTableRecord[]>([]);
-const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
-const [branchLoading, setBranchLoading] = useState(false);
+    const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
+    const [branchLoading, setBranchLoading] = useState(false);
 
-const [search, setSearch] = useState('');
-const [branchFilter, setBranchFilter] = useState<string>();
-const [roleFilter, setRoleFilter] = useState<string>();
-const [statusFilter, setStatusFilter] = useState<string>();
+    const [search, setSearch] = useState('');
+    const [branchFilter, setBranchFilter] = useState<string>();
+    const [roleFilter, setRoleFilter] = useState<string>();
+    const [statusFilter, setStatusFilter] = useState<string>();
 
-const [editingRecord, setEditingRecord] =
-    useState<UserTableRecord | null>(null);
+    const [editingRecord, setEditingRecord] =
+        useState<UserTableRecord | null>(null);
 
-const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(false);
 
-const [form] = Form.useForm();
+    const [form] = Form.useForm();
 
     const loadUsers = async () => {
-    try {
-        setLoading(true);
+        try {
+            setLoading(true);
 
-        const params = new URLSearchParams();
+            const params = new URLSearchParams();
 
-        if (search) params.set('search', search);
-        if (branchFilter) params.set('branchId', branchFilter);
-        if (roleFilter) params.set('role', roleFilter);
-        if (statusFilter) params.set('status', statusFilter);
+            if (search) params.set('search', search);
+            if (branchFilter) params.set('branchId', branchFilter);
+            if (roleFilter) params.set('role', roleFilter);
+            if (statusFilter) params.set('status', statusFilter);
 
-        const response = await fetch(
-            `/api/users?${params.toString()}`,
-        );
+            const response = await fetch(
+                `/api/users?${params.toString()}`,
+            );
 
-        if (!response.ok) {
-            throw new Error();
+            if (!response.ok) {
+                throw new Error();
+            }
+
+            const payload = await response.json();
+
+            const users: UserTableRecord[] = (payload.data ?? []).map(
+                (user: UserRecord) => ({
+                    ...user,
+                    branch: user.branchName ?? '',
+                }),
+            );
+
+            setData(users);
+        } catch {
+            message.error('Failed to load users');
+        } finally {
+            setLoading(false);
         }
-
-        const payload = await response.json();
-
-        const users: UserTableRecord[] = (payload.data ?? []).map(
-            (user: UserRecord) => ({
-                ...user,
-                branch: user.branchName ?? '',
-            }),
-        );
-
-        setData(users);
-    } catch {
-        message.error('Failed to load users');
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
     const loadBranches = async () => {
-    try {
-        setBranchLoading(true);
+        try {
+            setBranchLoading(true);
 
-        const response = await fetch('/api/branches');
+            const response = await fetch('/api/branches');
 
-        if (!response.ok) {
-            throw new Error();
+            if (!response.ok) {
+                throw new Error();
+            }
+
+            const payload = await response.json();
+
+            const options: BranchOption[] = (payload.data ?? []).map(
+                (branch: { id: string; name: string }) => ({
+                    value: branch.id,
+                    label: branch.name,
+                }),
+            );
+
+            setBranchOptions(options);
+        } catch {
+            message.error('Failed to load branches');
+        } finally {
+            setBranchLoading(false);
         }
-
-        const payload = await response.json();
-
-        const options: BranchOption[] = (payload.data ?? []).map(
-            (branch: {
-                id: string;
-                name: string;
-            }) => ({
-                value: branch.id,
-                label: branch.name,
-            }),
-        );
-
-        setBranchOptions(options);
-    } catch {
-        message.error('Failed to load branches');
-    } finally {
-        setBranchLoading(false);
-    }
-};
+    };
 
     useEffect(() => {
-        void loadUsers();
+        void (async () => {
+            await loadUsers();
+        })();
     }, []);
 
     const branchFilterOptions = useMemo(
         () =>
             Array.from(
-                new Set(
-                    data
-                        .map((item) => item.branch)
-                        .filter(Boolean),
-                ),
+                new Set(data.map((item) => item.branch).filter(Boolean)),
             ).map((branch) => ({
                 value: branch,
                 label: branch,
@@ -161,7 +164,7 @@ const [form] = Form.useForm();
                 return false;
             }
 
-            if (roleFilter && user.role !== roleFilter) {
+            if (roleFilter && !user.roles.includes(roleFilter as RoleCode)) {
                 return false;
             }
 
@@ -171,13 +174,7 @@ const [form] = Form.useForm();
 
             return true;
         });
-    }, [
-        data,
-        search,
-        branchFilter,
-        roleFilter,
-        statusFilter,
-    ]);
+    }, [data, search, branchFilter, roleFilter, statusFilter]);
 
     const openCreate = async () => {
         await loadBranches();
@@ -187,7 +184,7 @@ const [form] = Form.useForm();
         form.resetFields();
 
         form.setFieldsValue({
-            role: 'user',
+            roles: ['MEMBER'],
         });
 
         setOpen(true);
@@ -201,7 +198,7 @@ const [form] = Form.useForm();
         form.setFieldsValue({
             name: record.name,
             email: record.email,
-            role: record.role,
+            roles: record.roles,
             branchId: record.branchId,
         });
 
@@ -209,85 +206,25 @@ const [form] = Form.useForm();
     };
 
     const handleSave = async () => {
-    try {
-        const values = await form.validateFields();
+        try {
+            const values = await form.validateFields();
 
-        const payload = {
-            name: values.name,
-            email: values.email,
-            role: values.role,
-            branchId: values.branchId,
-        };
+            const payload = {
+                name: values.name,
+                email: values.email,
+                roles: values.roles as RoleCode[],
+                branchId: values.branchId,
+            };
 
-        if (editingRecord) {
-            const response = await fetch(
-                `/api/users/${editingRecord.id}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type':
-                            'application/json',
-                    },
-                    body: JSON.stringify(payload),
-                },
-            );
-
-            if (!response.ok) {
-                throw new Error();
-            }
-
-            message.success(
-                'User updated successfully',
-            );
-        } else {
-            const response = await fetch(
-                '/api/users',
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type':
-                            'application/json',
-                    },
-                    body: JSON.stringify({
-                        ...payload,
-                        status: 'active',
-                    }),
-                },
-            );
-
-            if (!response.ok) {
-                throw new Error();
-            }
-
-            message.success(
-                'User created successfully',
-            );
-        }
-
-        setOpen(false);
-
-        await loadUsers();
-    } catch {
-        message.error('Failed to save user');
-    }
-};
-
-    const handleDelete = (
-    id: string,
-) => {
-    modal.confirm({
-        title: 'Delete user?',
-        content:
-            'This action cannot be undone.',
-        okButtonProps: {
-            danger: true,
-        },
-        async onOk() {
-            try {
+            if (editingRecord) {
                 const response = await fetch(
-                    `/api/users/${id}`,
+                    `/api/users/${editingRecord.id}`,
                     {
-                        method: 'DELETE',
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(payload),
                     },
                 );
 
@@ -295,56 +232,85 @@ const [form] = Form.useForm();
                     throw new Error();
                 }
 
-                message.success(
-                    'User deleted successfully',
-                );
+                message.success('User updated successfully');
+            } else {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ...payload,
+                        status: 'active',
+                    }),
+                });
 
-                await loadUsers();
-            } catch {
-                message.error(
-                    'Failed to delete user',
-                );
+                if (!response.ok) {
+                    throw new Error();
+                }
+
+                message.success('User created successfully');
             }
-        },
-    });
-};
 
-    const toggleStatus = async (
-    record: UserTableRecord,
-) => {
-    try {
-        const response = await fetch(
-            `/api/users/${record.id}`,
-            {
+            setOpen(false);
+
+            await loadUsers();
+        } catch {
+            message.error('Failed to save user');
+        }
+    };
+
+    const handleDelete = (id: string) => {
+        modal.confirm({
+            title: 'Delete user?',
+            content: 'This action cannot be undone.',
+            okButtonProps: {
+                danger: true,
+            },
+            async onOk() {
+                try {
+                    const response = await fetch(`/api/users/${id}`, {
+                        method: 'DELETE',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error();
+                    }
+
+                    message.success('User deleted successfully');
+
+                    await loadUsers();
+                } catch {
+                    message.error('Failed to delete user');
+                }
+            },
+        });
+    };
+
+    const toggleStatus = async (record: UserTableRecord) => {
+        try {
+            const response = await fetch(`/api/users/${record.id}`, {
                 method: 'PATCH',
                 headers: {
-                    'Content-Type':
-                        'application/json',
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     status:
-                        record.status === 'active'
-                            ? 'inactive'
-                            : 'active',
+                        record.status === 'active' ? 'inactive' : 'active',
                 }),
-            },
-        );
+            });
 
-        if (!response.ok) {
-            throw new Error();
+            if (!response.ok) {
+                throw new Error();
+            }
+
+            message.success('User updated successfully');
+
+            await loadUsers();
+        } catch {
+            message.error('Failed to update user');
         }
-
-        message.success(
-            'User updated successfully',
-        );
-
-        await loadUsers();
-    } catch {
-        message.error(
-            'Failed to update user',
-        );
-    }
-};
+    };
 
     const columns = [
         {
@@ -353,14 +319,9 @@ const [form] = Form.useForm();
             width: 280,
             render: (_: string, record: UserTableRecord) => (
                 <div className="flex items-center gap-3">
-                    <Avatar
-                        size={32}
-                        icon={<UserOutlined />}
-                    />
+                    <Avatar size={32} icon={<UserOutlined />} />
                     <div>
-                        <div className="font-medium">
-                            {record.name}
-                        </div>
+                        <div className="font-medium">{record.name}</div>
                         <div className="text-xs text-gray-500">
                             {record.email}
                         </div>
@@ -369,11 +330,15 @@ const [form] = Form.useForm();
             ),
         },
         {
-            title: 'Role',
-            dataIndex: 'role',
-            width: 120,
-            render: (value: string) => (
-                <Tag>{value}</Tag>
+            title: 'Roles',
+            dataIndex: 'roles',
+            width: 200,
+            render: (value: RoleCode[]) => (
+                <Space size={4} wrap>
+                    {value.map((role) => (
+                        <Tag key={role}>{role}</Tag>
+                    ))}
+                </Space>
             ),
         },
         {
@@ -385,21 +350,14 @@ const [form] = Form.useForm();
             title: 'Birth Date',
             dataIndex: 'birthDate',
             width: 140,
-            render: (value: string | null) =>
-                value ?? '-',
+            render: (value: string | null) => value ?? '-',
         },
         {
             title: 'Status',
             dataIndex: 'status',
             width: 120,
             render: (value: string) => (
-                <Tag
-                    color={
-                        value === 'active'
-                            ? 'success'
-                            : 'default'
-                    }
-                >
+                <Tag color={value === 'active' ? 'success' : 'default'}>
                     {value}
                 </Tag>
             ),
@@ -410,10 +368,7 @@ const [form] = Form.useForm();
             align: 'right' as const,
             render: (_: unknown, record: UserTableRecord) => (
                 <Space size={4}>
-                    <Button
-                        size="small"
-                        icon={<EyeOutlined />}
-                    />
+                    <Button size="small" icon={<EyeOutlined />} />
 
                     <Button
                         size="small"
@@ -424,25 +379,21 @@ const [form] = Form.useForm();
                     <Button
                         size="small"
                         icon={<StopOutlined />}
-                        onClick={() =>
-                            toggleStatus(record)
-                        }
+                        onClick={() => toggleStatus(record)}
                     />
 
                     <Button
                         danger
                         size="small"
                         icon={<DeleteOutlined />}
-                        onClick={() =>
-                            handleDelete(record.id)
-                        }
+                        onClick={() => handleDelete(record.id)}
                     />
                 </Space>
             ),
         },
     ];
 
-    if (role !== 'admin') {
+    if (!currentUserRoles.includes('ADMIN')) {
         return (
             <Result
                 status="403"
@@ -455,26 +406,17 @@ const [form] = Form.useForm();
     return (
         <>
             <Breadcrumb
-                items={[
-                    { title: 'Administration' },
-                    { title: 'Users' },
-                ]}
+                items={[{ title: 'Administration' }, { title: 'Users' }]}
             />
 
             <div className="flex justify-between mb-4">
                 <div>
                     <Title level={3}>Users</Title>
-                    <Text type="secondary">
-                        Manage system users
-                    </Text>
+                    <Text type="secondary">Manage system users</Text>
                 </div>
 
                 <Space>
-                    <Button
-                        onClick={() => void loadUsers()}
-                    >
-                        Refresh
-                    </Button>
+                    <Button onClick={() => void loadUsers()}>Refresh</Button>
 
                     <Button
                         type="primary"
@@ -491,9 +433,7 @@ const [form] = Form.useForm();
                     placeholder="Search"
                     allowClear
                     style={{ width: 280 }}
-                    onChange={(e) =>
-                        setSearch(e.target.value)
-                    }
+                    onChange={(e) => setSearch(e.target.value)}
                 />
 
                 <Select
@@ -509,16 +449,7 @@ const [form] = Form.useForm();
                     placeholder="Role"
                     style={{ width: 140 }}
                     onChange={setRoleFilter}
-                    options={[
-                        {
-                            value: 'admin',
-                            label: 'Admin',
-                        },
-                        {
-                            value: 'user',
-                            label: 'User',
-                        },
-                    ]}
+                    options={ROLE_OPTIONS}
                 />
 
                 <Select
@@ -527,14 +458,9 @@ const [form] = Form.useForm();
                     style={{ width: 140 }}
                     onChange={setStatusFilter}
                     options={[
-                        {
-                            value: 'active',
-                            label: 'Active',
-                        },
-                        {
-                            value: 'inactive',
-                            label: 'Inactive',
-                        },
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                        { value: 'pending', label: 'Pending' },
                     ]}
                 />
             </Space>
@@ -549,28 +475,16 @@ const [form] = Form.useForm();
             <Modal
                 open={open}
                 width={520}
-                title={
-                    editingRecord
-                        ? 'Edit User'
-                        : 'Create User'
-                }
+                title={editingRecord ? 'Edit User' : 'Create User'}
                 onCancel={() => setOpen(false)}
                 onOk={handleSave}
                 okText="Save"
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    className="mt-4"
-                >
+                <Form form={form} layout="vertical" className="mt-4">
                     <Form.Item
                         name="name"
                         label="Full Name"
-                        rules={[
-                            {
-                                required: true,
-                            },
-                        ]}
+                        rules={[{ required: true }]}
                     >
                         <Input />
                     </Form.Item>
@@ -578,12 +492,7 @@ const [form] = Form.useForm();
                     <Form.Item
                         name="email"
                         label="Email"
-                        rules={[
-                            {
-                                required: true,
-                                type: 'email',
-                            },
-                        ]}
+                        rules={[{ required: true, type: 'email' }]}
                     >
                         <Input />
                     </Form.Item>
@@ -594,8 +503,7 @@ const [form] = Form.useForm();
                         rules={[
                             {
                                 required: true,
-                                message:
-                                    'Branch is required',
+                                message: 'Branch is required',
                             },
                         ]}
                     >
@@ -609,20 +517,19 @@ const [form] = Form.useForm();
                     </Form.Item>
 
                     <Form.Item
-                        name="role"
-                        label="Role"
+                        name="roles"
+                        label="Roles"
+                        rules={[
+                            {
+                                required: true,
+                                message: 'At least one role is required',
+                            },
+                        ]}
                     >
                         <Select
-                            options={[
-                                {
-                                    value: 'admin',
-                                    label: 'Admin',
-                                },
-                                {
-                                    value: 'user',
-                                    label: 'User',
-                                },
-                            ]}
+                            mode="multiple"
+                            placeholder="Select roles"
+                            options={ROLE_OPTIONS}
                         />
                     </Form.Item>
                 </Form>
