@@ -6,20 +6,23 @@ export type Json =
     | { [key: string]: Json | undefined }
     | Json[];
 
-// Enums from migration
-export type UserRole = 'ADMIN' | 'MEMBER' | 'PRE_REGISTERED_MENTOR';
+// ─── Enums (chỉ còn các enums không liên quan đến role vì role đã chuyển sang RBAC) ───
 export type UserStatus = 'active' | 'inactive' | 'pending';
-export type CourseStatus = 'active' | 'inactive';
 export type TrainingLinkStatus = 'in_progress' | 'completed';
 export type MentorRequestStatus = 'pending' | 'approved' | 'rejected';
 export type UserCourseProgressStatus = 'not_started' | 'in_progress' | 'completed';
 
+// ─── Role codes từ bảng roles (seed2) ───
+export type RoleCode = 'ADMIN' | 'MENTOR' | 'MEMBER';
+
 export interface Database {
     public: {
         Tables: {
+            // branches: thêm cột code (seed2)
             branches: {
                 Row: {
                     id: string;
+                    code: string;
                     name: string;
                     city: string;
                     is_active: boolean;
@@ -28,6 +31,7 @@ export interface Database {
                 };
                 Insert: {
                     id?: string;
+                    code: string;
                     name: string;
                     city: string;
                     is_active?: boolean;
@@ -36,14 +40,134 @@ export interface Database {
                 };
                 Update: {
                     id?: string;
+                    code?: string;
                     name?: string;
                     city?: string;
                     is_active?: boolean;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [];
             };
+
+            // roles: RBAC
+            roles: {
+                Row: {
+                    id: string;
+                    code: RoleCode;
+                    name: string;
+                    description: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    code: RoleCode;
+                    name: string;
+                    description?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    code?: RoleCode;
+                    name?: string;
+                    description?: string | null;
+                    updated_at?: string;
+                };
+                Relationships: [];
+            };
+
+            // permission_groups
+            permission_groups: {
+                Row: {
+                    id: string;
+                    code: string;
+                    name: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    code: string;
+                    name: string;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    code?: string;
+                    name?: string;
+                };
+                Relationships: [];
+            };
+
+            // permissions
+            permissions: {
+                Row: {
+                    id: string;
+                    permission_group_id: string;
+                    code: string;
+                    name: string;
+                    module: string;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    permission_group_id: string;
+                    code: string;
+                    name: string;
+                    module: string;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    permission_group_id?: string;
+                    code?: string;
+                    name?: string;
+                    module?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'permissions_permission_group_id_fkey';
+                        columns: ['permission_group_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'permission_groups';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+
+            // role_permissions: composite PK (role_id, permission_id)
+            role_permissions: {
+                Row: {
+                    role_id: string;
+                    permission_id: string;
+                };
+                Insert: {
+                    role_id: string;
+                    permission_id: string;
+                };
+                Update: {
+                    role_id?: string;
+                    permission_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'role_permissions_role_id_fkey';
+                        columns: ['role_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'roles';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'role_permissions_permission_id_fkey';
+                        columns: ['permission_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'permissions';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+
+            // users: KHÔNG có cột role (seed2 insert users không có role)
             users: {
                 Row: {
                     id: string;
@@ -52,7 +176,6 @@ export interface Database {
                     full_name: string;
                     birth_date: string | null;
                     branch_id: string | null;
-                    role: UserRole;
                     status: UserStatus;
                     avatar_url: string | null;
                     phone: string | null;
@@ -66,7 +189,6 @@ export interface Database {
                     full_name: string;
                     birth_date?: string | null;
                     branch_id?: string | null;
-                    role?: UserRole;
                     status?: UserStatus;
                     avatar_url?: string | null;
                     phone?: string | null;
@@ -80,11 +202,9 @@ export interface Database {
                     full_name?: string;
                     birth_date?: string | null;
                     branch_id?: string | null;
-                    role?: UserRole;
                     status?: UserStatus;
                     avatar_url?: string | null;
                     phone?: string | null;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [
@@ -97,6 +217,41 @@ export interface Database {
                     },
                 ];
             };
+
+            // user_roles: composite PK (user_id, role_id)
+            user_roles: {
+                Row: {
+                    user_id: string;
+                    role_id: string;
+                    created_at: string;
+                };
+                Insert: {
+                    user_id: string;
+                    role_id: string;
+                    created_at?: string;
+                };
+                Update: {
+                    user_id?: string;
+                    role_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'user_roles_user_id_fkey';
+                        columns: ['user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'user_roles_role_id_fkey';
+                        columns: ['role_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'roles';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+
             courses: {
                 Row: {
                     id: string;
@@ -125,20 +280,20 @@ export interface Database {
                     description?: string | null;
                     order_no?: number;
                     is_active?: boolean;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [];
             };
-            // Columns: start_month / end_month (date type in DB, stored as ISO date strings)
+
+            // training_links: seed2 dùng start_date / end_date
             training_links: {
                 Row: {
                     id: string;
                     course_id: string;
                     mentor_id: string;
                     disciple_id: string;
-                    start_month: string;
-                    end_month: string | null;
+                    start_date: string;
+                    end_date: string | null;
                     status: TrainingLinkStatus;
                     notes: string | null;
                     created_by: string | null;
@@ -150,8 +305,8 @@ export interface Database {
                     course_id: string;
                     mentor_id: string;
                     disciple_id: string;
-                    start_month: string;
-                    end_month?: string | null;
+                    start_date: string;
+                    end_date?: string | null;
                     status?: TrainingLinkStatus;
                     notes?: string | null;
                     created_by?: string | null;
@@ -163,12 +318,11 @@ export interface Database {
                     course_id?: string;
                     mentor_id?: string;
                     disciple_id?: string;
-                    start_month?: string;
-                    end_month?: string | null;
+                    start_date?: string;
+                    end_date?: string | null;
                     status?: TrainingLinkStatus;
                     notes?: string | null;
                     created_by?: string | null;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [
@@ -202,6 +356,8 @@ export interface Database {
                     },
                 ];
             };
+
+            // mentor_requests: migration v1 schema (no mentor_id/course_id FK columns)
             mentor_requests: {
                 Row: {
                     id: string;
@@ -242,7 +398,6 @@ export interface Database {
                     status?: MentorRequestStatus;
                     reviewed_by?: string | null;
                     reviewed_at?: string | null;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [
@@ -262,7 +417,8 @@ export interface Database {
                     },
                 ];
             };
-            // Migration v2: conversations no longer have course_id; columns are user_a_id / user_b_id
+
+            // conversations: migration v2 — user_a_id / user_b_id (không có course_id)
             conversations: {
                 Row: {
                     id: string;
@@ -280,7 +436,6 @@ export interface Database {
                     id?: string;
                     user_a_id?: string;
                     user_b_id?: string;
-                    created_at?: string;
                 };
                 Relationships: [
                     {
@@ -299,7 +454,8 @@ export interface Database {
                     },
                 ];
             };
-            // Migration v2: messages has is_read (not email_sent)
+
+            // messages: migration v2 — is_read (không có email_sent)
             messages: {
                 Row: {
                     id: string;
@@ -323,7 +479,6 @@ export interface Database {
                     sender_id?: string;
                     content?: string;
                     is_read?: boolean;
-                    created_at?: string;
                 };
                 Relationships: [
                     {
@@ -342,7 +497,8 @@ export interface Database {
                     },
                 ];
             };
-            // Migration v2: notifications.content is nullable
+
+            // notifications: migration v2 — content nullable
             notifications: {
                 Row: {
                     id: string;
@@ -366,7 +522,6 @@ export interface Database {
                     title?: string;
                     content?: string | null;
                     is_read?: boolean;
-                    created_at?: string;
                 };
                 Relationships: [
                     {
@@ -378,6 +533,7 @@ export interface Database {
                     },
                 ];
             };
+
             user_course_progress: {
                 Row: {
                     id: string;
@@ -409,10 +565,16 @@ export interface Database {
                     status?: UserCourseProgressStatus;
                     start_date?: string | null;
                     completed_date?: string | null;
-                    created_at?: string;
                     updated_at?: string;
                 };
                 Relationships: [
+                    {
+                        foreignKeyName: 'user_course_progress_user_id_fkey';
+                        columns: ['user_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'users';
+                        referencedColumns: ['id'];
+                    },
                     {
                         foreignKeyName: 'user_course_progress_course_id_fkey';
                         columns: ['course_id'];
@@ -427,15 +589,9 @@ export interface Database {
                         referencedRelation: 'users';
                         referencedColumns: ['id'];
                     },
-                    {
-                        foreignKeyName: 'user_course_progress_user_id_fkey';
-                        columns: ['user_id'];
-                        isOneToOne: false;
-                        referencedRelation: 'users';
-                        referencedColumns: ['id'];
-                    },
                 ];
             };
+
             audit_logs: {
                 Row: {
                     id: string;
@@ -465,7 +621,6 @@ export interface Database {
                     action?: string;
                     old_data?: Json | null;
                     new_data?: Json | null;
-                    created_at?: string;
                 };
                 Relationships: [
                     {
@@ -486,22 +641,12 @@ export interface Database {
                     total_courses: number | null;
                     total_completed: number | null;
                 };
-                Relationships: [
-                    {
-                        foreignKeyName: 'training_links_mentor_id_fkey';
-                        columns: ['mentor_id'];
-                        isOneToOne: false;
-                        referencedRelation: 'users';
-                        referencedColumns: ['id'];
-                    },
-                ];
+                Relationships: [];
             };
         };
         Functions: Record<string, never>;
         Enums: {
-            user_role: UserRole;
             user_status: UserStatus;
-            course_status: CourseStatus;
             training_link_status: TrainingLinkStatus;
             mentor_request_status: MentorRequestStatus;
             user_course_progress_status: UserCourseProgressStatus;
