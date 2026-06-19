@@ -30,8 +30,8 @@ interface RelationFormValues {
     courseId: string;
     mentorId: string;
     discipleId: string;
-    startMonth: Dayjs;
-    endMonth?: Dayjs;
+    startDate: Dayjs;
+    endDate?: Dayjs;
     notes?: string;
     status?: 'in_progress' | 'completed';
 }
@@ -105,14 +105,18 @@ export default function TrainingRelations() {
     };
 
     // ── Select / Status options ────────────────────────────────────────────────
+    // Mentors/disciples can be any user with the ADMIN or MENTOR role (multi-role aware).
     const mentorOptions = useMemo(
         () =>
             users
-                .filter((u) => u.role === 'ADMIN' || u.role === 'MEMBER')
+                .filter((u) => u.roles.includes('ADMIN') || u.roles.includes('MENTOR'))
                 .map((u) => ({ value: u.id, label: u.name })),
         [users],
     );
-    const discipleOptions = mentorOptions;
+    const discipleOptions = useMemo(
+        () => users.map((u) => ({ value: u.id, label: u.name })),
+        [users],
+    );
     const courseOptions = useMemo(
         () => courses.map((c) => ({ value: c.id, label: c.name })),
         [courses],
@@ -147,8 +151,8 @@ export default function TrainingRelations() {
             courseId: record.courseId,
             mentorId: record.mentorId,
             discipleId: record.discipleId,
-            startMonth: toDayjs(record.startMonth),
-            endMonth: toDayjs(record.endMonth),
+            startDate: toDayjs(record.startDate),
+            endDate: toDayjs(record.endDate),
             status: record.status ?? 'in_progress',
             notes: record.notes ?? undefined,
         });
@@ -170,8 +174,8 @@ export default function TrainingRelations() {
                 courseId: values.courseId,
                 mentorId: values.mentorId,
                 discipleId: values.discipleId,
-                startMonth: toDateString(values.startMonth),
-                endMonth: values.endMonth ? toDateString(values.endMonth) : null,
+                startDate: toDateString(values.startDate),
+                endDate: values.endDate ? toDateString(values.endDate) : null,
                 status: values.status ?? 'in_progress',
                 notes: values.notes || null,
                 createdBy: null,
@@ -195,40 +199,16 @@ export default function TrainingRelations() {
                 courseId: values.courseId,
                 mentorId: values.mentorId,
                 discipleId: values.discipleId,
-                startMonth: toDateString(values.startMonth),
-                endMonth: values.endMonth ? toDateString(values.endMonth) : null,
+                startDate: toDateString(values.startDate),
+                endDate: values.endDate ? toDateString(values.endDate) : null,
                 status: values.status ?? record.status,
                 notes: values.notes || null,
             }),
         });
 
         if (!response.ok) {
-            // Fallback: optimistic local update
-            const courseName = courseOptions.find((o) => o.value === values.courseId)?.label;
-            const mentorName = mentorOptions.find((o) => o.value === values.mentorId)?.label;
-            const discipleName = discipleOptions.find((o) => o.value === values.discipleId)?.label;
-
-            setData((prev) =>
-                prev.map((item) =>
-                    item.id === record.id
-                        ? {
-                              ...item,
-                              courseId: values.courseId,
-                              courseName,
-                              mentorId: values.mentorId,
-                              mentorName,
-                              discipleId: values.discipleId,
-                              discipleName,
-                              startMonth: toDateString(values.startMonth),
-                              endMonth: values.endMonth ? toDateString(values.endMonth) : null,
-                              status: values.status ?? item.status,
-                              notes: values.notes || null,
-                          }
-                        : item,
-                ),
-            );
-            message.success('Training relation updated (local)');
-            return;
+            const result = await response.json().catch(() => null);
+            throw new Error(result?.message ?? 'Failed to update relation');
         }
 
         const result = await response.json();
@@ -307,13 +287,13 @@ export default function TrainingRelations() {
             ),
         },
         {
-            title: 'Start Month',
-            dataIndex: 'startMonth',
+            title: 'Start Date',
+            dataIndex: 'startDate',
             render: (value: string | null) => formatDate(value),
         },
         {
-            title: 'End Month',
-            dataIndex: 'endMonth',
+            title: 'End Date',
+            dataIndex: 'endDate',
             render: (value: string | null) => formatDate(value),
         },
         {
@@ -477,31 +457,31 @@ export default function TrainingRelations() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <Form.Item
-                            label="Start Month"
-                            name="startMonth"
-                            rules={[{ required: true, message: 'Please select a start month' }]}
+                            label="Start Date"
+                            name="startDate"
+                            rules={[{ required: true, message: 'Please select a start date' }]}
                         >
                             <DatePicker
                                 style={{ width: '100%' }}
                                 format="MM/YYYY"
                                 picker="month"
-                                placeholder="Select start month"
+                                placeholder="Select start date"
                             />
                         </Form.Item>
 
                         <Form.Item
-                            label="End Month"
-                            name="endMonth"
-                            dependencies={['startMonth']}
+                            label="End Date"
+                            name="endDate"
+                            dependencies={['startDate']}
                             rules={[
                                 ({ getFieldValue }) => ({
                                     validator(_, value: Dayjs | undefined) {
-                                        const start: Dayjs | undefined = getFieldValue('startMonth');
+                                        const start: Dayjs | undefined = getFieldValue('startDate');
                                         if (!value || !start || value.isAfter(start)) {
                                             return Promise.resolve();
                                         }
                                         return Promise.reject(
-                                            new Error('End month must be after start month'),
+                                            new Error('End date must be after start date'),
                                         );
                                     },
                                 }),
@@ -511,7 +491,7 @@ export default function TrainingRelations() {
                                 style={{ width: '100%' }}
                                 format="MM/YYYY"
                                 picker="month"
-                                placeholder="Select end month (optional)"
+                                placeholder="Select end date (optional)"
                             />
                         </Form.Item>
                     </div>
