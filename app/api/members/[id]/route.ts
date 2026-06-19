@@ -1,4 +1,3 @@
-// app/api/members/[id]/route.ts
 import { NextRequest } from 'next/server';
 
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
@@ -26,25 +25,43 @@ function handleError(error: unknown) {
   );
 }
 
+// users no longer carry a single `role` column — roles come from the
+// user_roles -> roles RBAC join (see seed2.sql / database.types.ts).
+type UserWithRoles = {
+  id: string;
+  full_name: string;
+  email: string;
+  status: string;
+  birth_date: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  branch_id: string | null;
+  user_roles?: { role: { code: string } | null }[];
+};
+
+type LinkRow = {
+  id: string;
+  course_id: string;
+  mentor_id: string;
+  disciple_id: string;
+  start_date: string;
+  end_date: string | null;
+  status: 'in_progress' | 'completed';
+};
+
 function mapMember(
-  row: {
-    id: string;
-    full_name: string;
-    email: string;
-    role: string;
-    status: string;
-    birth_date: string | null;
-    phone: string | null;
-    avatar_url: string | null;
-    branch_id: string | null;
-  },
+  row: UserWithRoles,
   branchNames: Map<string, string>,
 ): MemberProfileRecord {
+  const roles = (row.user_roles ?? [])
+    .map((ur) => ur.role?.code)
+    .filter((code): code is string => Boolean(code));
+
   return {
     id: row.id,
     fullName: row.full_name,
     email: row.email,
-    role: row.role,
+    roles,
     status: row.status,
     birthDate: row.birth_date,
     phone: row.phone,
@@ -70,6 +87,9 @@ export async function GET(
 
     const admin = getSupabaseAdminClient();
 
+    const SELECT_USER_WITH_ROLES =
+      'id, full_name, email, status, birth_date, phone, avatar_url, branch_id, user_roles ( role:roles ( code ) )';
+
     const [
       memberResult,
       usersResult,
@@ -77,23 +97,13 @@ export async function GET(
       coursesResult,
       linksResult,
     ] = await Promise.all([
-      admin.from('users').select('*').eq('id', memberId).single(),
-
       admin
         .from('users')
-        .select(
-          `
-          id,
-          full_name,
-          email,
-          role,
-          status,
-          birth_date,
-          phone,
-          avatar_url,
-          branch_id
-        `,
-        ),
+        .select(SELECT_USER_WITH_ROLES)
+        .eq('id', memberId)
+        .single(),
+
+      admin.from('users').select(SELECT_USER_WITH_ROLES),
 
       admin.from('branches').select('id,name'),
 
@@ -108,25 +118,17 @@ export async function GET(
     if (coursesResult.error) throw coursesResult.error;
     if (linksResult.error) throw linksResult.error;
 
-    const users = usersResult.data ?? [];
-    const links = linksResult.data ?? [];
+    const users = (usersResult.data ?? []) as unknown as UserWithRoles[];
+    const links = (linksResult.data ?? []) as unknown as LinkRow[];
 
-    const usersById = new Map(
-      users.map((u) => [u.id, u]),
-    );
+    const usersById = new Map(users.map((u) => [u.id, u]));
 
     const branchNames = new Map(
-      (branchesResult.data ?? []).map((b) => [
-        b.id,
-        b.name,
-      ]),
+      (branchesResult.data ?? []).map((b) => [b.id, b.name]),
     );
 
     const courseNames = new Map(
-      (coursesResult.data ?? []).map((c) => [
-        c.id,
-        c.name,
-      ]),
+      (coursesResult.data ?? []).map((c) => [c.id, c.name]),
     );
 
     // =====================================================
@@ -148,8 +150,7 @@ export async function GET(
       ...statsByCourse.entries(),
     ].map(([cId, total]) => ({
       courseId: cId,
-      courseName:
-        courseNames.get(cId) ?? cId,
+      courseName: courseNames.get(cId) ?? cId,
       totalDisciples: total,
     }));
 
@@ -161,18 +162,13 @@ export async function GET(
     // =====================================================
 
     if (courseId) {
-      const courseLinks = links.filter(
-        (l) => l.course_id === courseId,
-      );
+      const courseLinks = links.filter((l) => l.course_id === courseId);
 
       // =================================================
       // DESCENDANTS
       // =================================================
 
-      const descendantLevelMap = new Map<
-        string,
-        number
-      >([[memberId, -1]]);
+      const descendantLevelMap = new Map<string, number>([[memberId, -1]]);
 
       let frontier = [memberId];
 
@@ -185,14 +181,11 @@ export async function GET(
           for (const link of courseLinks) {
             if (
               link.mentor_id === currentId &&
-              !descendantLevelMap.has(
-                link.disciple_id,
-              )
+              !descendantLevelMap.has(link.disciple_id)
             ) {
               descendantLevelMap.set(
                 link.disciple_id,
-                (descendantLevelMap.get(currentId) ??
-                  -1) + 1,
+                (descendantLevelMap.get(currentId) ?? -1) + 1,
               );
 
               descendantLinks.push(link);
@@ -206,28 +199,19 @@ export async function GET(
       }
 
       descendantLinks.forEach((link) => {
-        const user = usersById.get(
-          link.disciple_id,
-        );
+        const user = usersById.get(link.disciple_id);
 
         if (!user) return;
 
         descendants.push({
-          member: mapMember(
-            user,
-            branchNames,
-          ),
-          level:
-            descendantLevelMap.get(
-              link.disciple_id,
-            ) ?? 0,
+          member: mapMember(user, branchNames),
+          level: descendantLevelMap.get(link.disciple_id) ?? 0,
           link: {
             id: link.id,
             mentorId: link.mentor_id,
             discipleId: link.disciple_id,
-            // DB columns are start_month / end_month
-            startMonth: link.start_month,
-            endMonth: link.end_month,
+            startDate: link.start_date,
+            endDate: link.end_date,
             status: link.status,
           },
         });
@@ -244,62 +228,48 @@ export async function GET(
 
       while (true) {
         const parentLink = courseLinks.find(
-          (l) =>
-            l.disciple_id === currentDiscipleId,
+          (l) => l.disciple_id === currentDiscipleId,
         );
 
         if (!parentLink) {
           break;
         }
 
-        if (
-          visited.has(parentLink.mentor_id)
-        ) {
+        if (visited.has(parentLink.mentor_id)) {
           break;
         }
 
         visited.add(parentLink.mentor_id);
 
-        const mentor = usersById.get(
-          parentLink.mentor_id,
-        );
+        const mentor = usersById.get(parentLink.mentor_id);
 
         if (!mentor) {
           break;
         }
 
         ancestors.push({
-          member: mapMember(
-            mentor,
-            branchNames,
-          ),
+          member: mapMember(mentor, branchNames),
           level,
           link: {
             id: parentLink.id,
             mentorId: parentLink.mentor_id,
-            discipleId:
-              parentLink.disciple_id,
-            // DB columns are start_month / end_month
-            startMonth:
-              parentLink.start_month,
-            endMonth:
-              parentLink.end_month,
+            discipleId: parentLink.disciple_id,
+            startDate: parentLink.start_date,
+            endDate: parentLink.end_date,
             status: parentLink.status,
           },
         });
 
-        currentDiscipleId =
-          parentLink.mentor_id;
+        currentDiscipleId = parentLink.mentor_id;
 
         level += 1;
       }
     }
 
+    const memberRow = memberResult.data as unknown as UserWithRoles;
+
     const response: MemberDetailResponse = {
-      member: mapMember(
-        memberResult.data,
-        branchNames,
-      ),
+      member: mapMember(memberRow, branchNames),
       mentorStats,
       descendants,
       ancestors,
