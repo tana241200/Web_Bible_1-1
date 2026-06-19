@@ -5,14 +5,26 @@ import { optionalString, readJsonBody, requireString } from '@/lib/api/validatio
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { UserInput, UserRecord } from '@/types/user.types';
 import type { RoleCode } from '@/types/auth.types';
-import type { UserStatus } from '@/types/database.types';
+import type { Database, UserStatus } from '@/types/database.types';
 
 const userStatuses = new Set<UserStatus>(['active', 'inactive', 'pending']);
 
-function mapUser(row: any, branchName?: string | null): UserRecord {
+type UserRow = {
+    id: string;
+    email: string;
+    full_name: string;
+    birth_date: string | null;
+    branch_id: string | null;
+    status: UserStatus;
+    avatar_url: string | null;
+    phone: string | null;
+    user_roles?: { role: { code: string } | null }[];
+};
+
+function mapUser(row: UserRow, branchName?: string | null): UserRecord {
     const roles = (row.user_roles ?? [])
-        .map((ur: any) => ur.role?.code)
-        .filter((c: any): c is RoleCode => Boolean(c));
+        .map((ur) => ur.role?.code)
+        .filter((c): c is RoleCode => Boolean(c));
     return {
         id: row.id,
         name: row.full_name,
@@ -66,7 +78,7 @@ export async function PATCH(
         const admin = getSupabaseAdminClient();
         const body = await readJsonBody<Partial<UserInput>>(request);
 
-        const payload: Record<string, unknown> = {};
+        const payload: Database['public']['Tables']['users']['Update'] = {};
         if (body.name !== undefined) payload.full_name = requireString(body.name, 'name');
         if (body.birthDate !== undefined) payload.birth_date = body.birthDate;
         if (body.branchId !== undefined) payload.branch_id = body.branchId;
@@ -75,7 +87,7 @@ export async function PATCH(
         if (body.status !== undefined) {
             if (!userStatuses.has(body.status as UserStatus))
                 throw new ApiError('Invalid user status.', 400);
-            payload.status = body.status;
+            payload.status = body.status as UserStatus;
         }
         const avatar = optionalString(body.avatar);
         const phone = optionalString(body.phone);
