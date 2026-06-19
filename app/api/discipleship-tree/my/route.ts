@@ -1,3 +1,4 @@
+// app/api/discipleship-tree/my/route.ts
 import { NextRequest } from 'next/server';
 
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
         const branchNames = new Map((branchesResult.data ?? []).map((b) => [b.id, b.name]));
         const allLinks = linksResult.data ?? [];
 
-        // ── Truy vết ngược lên (Ancestors): disciple_id -> mentor_id, đến tận gốc ──
+        // ── Trace upward (Ancestors): disciple_id -> mentor_id up to root ──
         const ancestorLinks = new Map<string, typeof allLinks[number]>();
         const ancestorVisited = new Set<string>([userId]);
         let frontier = [userId];
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
             frontier = next;
         }
 
-        // ── Truy vết xuôi xuống (Descendants): mentor_id -> disciple_id, hết các thế hệ ──
+        // ── Trace downward (Descendants): mentor_id -> disciple_id all generations ──
         const descendantLinks = new Map<string, typeof allLinks[number]>();
         const descendantVisited = new Set<string>([userId]);
         frontier = [userId];
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
 
         const mentorIds = new Set(lineageLinks.map((l) => l.mentor_id));
         const discipleIds = new Set(lineageLinks.map((l) => l.disciple_id));
-        // Nếu user hoàn toàn chưa có liên kết nào, hiển thị chính họ làm root duy nhất
+        // If the user has no links at all, show them as the sole root
         const rootMentorIds = mentorIds.size > 0
             ? [...mentorIds].filter((id) => !discipleIds.has(id))
             : [userId];
