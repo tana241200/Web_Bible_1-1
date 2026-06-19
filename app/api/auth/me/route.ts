@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/jwt';
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
-import type { AuthUser, UserRoleCode } from '@/types/auth.types';
+import type { AuthUser } from '@/types/auth.types';
 
 export async function GET() {
   try {
@@ -17,8 +17,7 @@ export async function GET() {
     const payload = verifyToken(token);
     const admin = getSupabaseAdminClient();
 
-    // NOTE: "role" is no longer a column on users. Roles now come through the
-    // user_roles -> roles relation, embedded here as role codes/names.
+    // users.role is the enum column (ADMIN | MEMBER | PRE_REGISTERED_MENTOR)
     const { data: user } = await admin
       .from('users')
       .select(
@@ -28,13 +27,7 @@ export async function GET() {
         full_name,
         status,
         branch_id,
-        user_roles (
-          role:roles (
-            id,
-            code,
-            name
-          )
-        )
+        role
       `
       )
       .eq('id', payload.userId)
@@ -44,15 +37,11 @@ export async function GET() {
       return apiFailure('Unauthorized', 401);
     }
 
-    const roleCodes = (user.user_roles ?? [])
-      .map((ur) => ur.role?.code)
-      .filter((code): code is string => Boolean(code)) as UserRoleCode[];
-
     const response: AuthUser = {
       id: user.id,
       email: user.email,
       fullName: user.full_name,
-      roles: roleCodes,
+      role: user.role,
       branchId: user.branch_id,
     };
 
