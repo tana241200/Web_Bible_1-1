@@ -16,10 +16,7 @@ import {
 } from '@ant-design/icons';
 
 import { useRouter } from 'next/navigation';
-import { message } from 'antd';
-
-
-const { Title, Text, Link } = Typography;
+import { message } from 'antd';const { Title, Text, Link } = Typography;
 
 export default function LoginPage() {
   const [form] = Form.useForm();
@@ -41,81 +38,15 @@ const onFinish = async (values: any) => {
 
     const result = await response.json();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     if (!response.ok) {
       message.error(result.message);
       return;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
 
-    message.success('Login successful');
-
-
-
-
-
-
-    router.push('/dashboard');
+    message.success('Login successful');    router.push('/dashboard');
   } catch {
     message.error('Login failed');
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
   }
 };

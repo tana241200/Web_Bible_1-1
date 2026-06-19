@@ -1,143 +1,215 @@
+
 'use client';
+
+import { ReactNode } from 'react';
+
 import {
     Breadcrumb,
     Button,
     Card,
     Empty,
     Input,
+    Skeleton,
     Space,
+    Spin,
     Table,
     Typography,
 } from 'antd';
+
 import {
     ReloadOutlined,
     SearchOutlined,
 } from '@ant-design/icons';
-import { ReactNode, useState } from 'react';
-import type { ColumnsType } from 'antd/es/table';
+
+import type {
+    ColumnsType,
+    TableProps,
+} from 'antd/es/table';
+
 const { Title, Text } = Typography;
+
 interface DataPageProps<T> {
     title: string;
     subtitle?: string;
     breadcrumbs?: string[];
+
     filters?: ReactNode;
     actions?: ReactNode;
+
     columns: ColumnsType<T>;
     dataSource: T[];
+
     rowKey?: string;
+
     loading?: boolean;
+    refreshing?: boolean;
+
     searchable?: boolean;
     searchPlaceholder?: string;
+
     onSearch?: (keyword: string) => void;
     onRefresh?: () => void;
+
+    tableProps?: TableProps<T>;
 }
-export default function DataPage<
-    T extends object,
->({
+
+export default function DataPage<T extends object>({
     title,
     subtitle,
     breadcrumbs,
+
     filters,
     actions,
+
     columns,
     dataSource,
-    loading,
+
+    loading = false,
+    refreshing = false,
+
     rowKey = 'id',
+
     searchable = true,
     searchPlaceholder = 'Search...',
+
     onSearch,
     onRefresh,
+
+    tableProps,
 }: DataPageProps<T>) {
     return (
-        <div className="space-y-4">
-            {/* Breadcrumb */}
-            {breadcrumbs && (
-                <Breadcrumb
-                    separator={
-                        <span
-                            style={{
-                                color: "#9CA3AF",
-                                fontSize: 12,
-                            }}
-                        >
-                            /
-                        </span>
-                    }
-                    items={breadcrumbs.map(
-                        (item, index) => {
-                            const isLast =
-                                index ===
-                                breadcrumbs.length - 1;
-                            return {
-                                title: (
-                                    <span
+        
+            <div className="space-y-4">
+                {/* Breadcrumb */}
+                {breadcrumbs && (
+                    <Breadcrumb
+                        separator={
+                            <span
+                                style={{
+                                    color: '#9CA3AF',
+                                    fontSize: 12,
+                                }}
+                            >
+                                /
+                            </span>
+                        }
+                        items={breadcrumbs.map(
+                            (item, index) => {
+                                const isLast =
+                                    index ===
+                                    breadcrumbs.length - 1;
+
+                                return {
+                                    title: (
+                                        <span
+                                            style={{
+                                                color: isLast
+                                                    ? '#111827'
+                                                    : '#6B7280',
+                                                fontWeight:
+                                                    isLast
+                                                        ? 600
+                                                        : 500,
+                                                fontSize: 14,
+                                                cursor:
+                                                    isLast
+                                                        ? 'default'
+                                                        : 'pointer',
+                                                transition:
+                                                    'all .2s ease',
+                                            }}
+                                            onMouseEnter={(
+                                                e,
+                                            ) => {
+                                                if (
+                                                    !isLast
+                                                ) {
+                                                    e.currentTarget.style.color =
+                                                        '#166534';
+                                                }
+                                            }}
+                                            onMouseLeave={(
+                                                e,
+                                            ) => {
+                                                if (
+                                                    !isLast
+                                                ) {
+                                                    e.currentTarget.style.color =
+                                                        '#6B7280';
+                                                }
+                                            }}
+                                        >
+                                            {item}
+                                        </span>
+                                    ),
+                                };
+                            },
+                        )}
+                    />
+                )}
+
+                {/* Header */}
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        {loading &&
+                        dataSource.length === 0 ? (
+                            <>
+                                <Skeleton.Input
+                                    active
+                                    style={{
+                                        width: 280,
+                                        height: 32,
+                                    }}
+                                />
+
+                                {subtitle && (
+                                    <div
                                         style={{
-                                            color: isLast
-                                                ? "#111827"
-                                                : "#6B7280",
-                                            fontWeight: isLast
-                                                ? 600
-                                                : 500,
-                                            fontSize: 14,
-                                            cursor: isLast
-                                                ? "default"
-                                                : "pointer",
-                                            transition:
-                                                "all .2s ease",
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            if (!isLast) {
-                                                e.currentTarget.style.color =
-                                                    "#166534";
-                                            }
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            if (!isLast) {
-                                                e.currentTarget.style.color =
-                                                    "#6B7280";
-                                            }
+                                            marginTop: 8,
                                         }}
                                     >
-                                        {item}
-                                    </span>
-                                ),
-                            };
-                        },
-                    )}
-                />
-            )}
-            {/* Header */}
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <Title
-                        level={3}
-                        style={{
-                            marginBottom: 0,
-                        }}
-                    >
-                        {title}
-                    </Title>
-                    {subtitle && (
-                        <Text type="secondary">
-                            {subtitle}
-                        </Text>
-                    )}
+                                        <Skeleton.Input
+                                            active
+                                            size="small"
+                                            style={{
+                                                width: 360,
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <Title
+                                    level={3}
+                                    style={{
+                                        marginBottom: 0,
+                                    }}
+                                >
+                                    {title}
+                                </Title>
+
+                                {subtitle && (
+                                    <Text type="secondary">
+                                        {subtitle}
+                                    </Text>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <Space>{actions}</Space>
                 </div>
-                <Space>{actions}</Space>
-            </div>
-            {/* Filter Card */}
-            <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-            }}>
+
+                {/* Filters */}
                 {(filters || searchable) && (
                     <Card>
-                        <div className="flex flex-wrap gap-10 justify-between">
+                        <div className="flex flex-wrap justify-between gap-4">
                             <Space>
                                 {searchable && (
                                     <Input.Search
                                         allowClear
+                                        disabled={loading}
                                         prefix={
                                             <SearchOutlined />
                                         }
@@ -152,10 +224,17 @@ export default function DataPage<
                                         }
                                     />
                                 )}
+
                                 {onRefresh && (
                                     <Button
                                         icon={
                                             <ReloadOutlined />
+                                        }
+                                        loading={
+                                            refreshing
+                                        }
+                                        disabled={
+                                            loading
                                         }
                                         onClick={
                                             onRefresh
@@ -165,46 +244,63 @@ export default function DataPage<
                                     </Button>
                                 )}
                             </Space>
+
                             <Space wrap>
                                 {filters}
                             </Space>
                         </div>
                     </Card>
                 )}
+
                 {/* Table */}
                 <Card
                     styles={{
                         body: {
                             padding: 0,
+                            overflow: 'hidden',
                         },
                     }}
                 >
-                    <Table<T>
-                        rowKey={rowKey}
-                        columns={columns}
-                        dataSource={dataSource}
-                        loading={loading}
-                        locale={{
-                            emptyText: (
-                                <Empty />
-                            ),
+                    <div
+                        style={{
+                            width: '100%',
+                            overflowX: 'auto',
                         }}
-                        pagination={{
-                            showSizeChanger: true,
-                            pageSizeOptions: [
-                                '10',
-                                '20',
-                                '50',
-                                '100',
-                            ],
-                            showTotal: (
-                                total,
-                            ) =>
-                                `${total} items`,
-                        }}
-                    />
+                    >
+                        <Table<T>
+                            rowKey={rowKey}
+                            columns={columns}
+                            dataSource={dataSource}
+                            loading={loading}
+                            scroll={{
+                                x: 'max-content',
+                                ...tableProps?.scroll,
+                            }}
+                            locale={{
+                                emptyText: <Empty />,
+                            }}
+                            pagination={{
+                                showSizeChanger: true,
+                                pageSizeOptions: [
+                                    '10',
+                                    '20',
+                                    '50',
+                                    '100',
+                                ],
+                                showTotal: (
+                                    total,
+                                ) =>
+                                    `${total} items`,
+                                ...(typeof tableProps?.pagination ===
+                                'object'
+                                    ? tableProps.pagination
+                                    : {}),
+                            }}
+                            {...tableProps}
+                        />
+                    </div>
                 </Card>
             </div>
-        </div>
     );
 }
+

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+
 import {
     Breadcrumb,
     Card,
@@ -14,493 +15,736 @@ import {
     App,
     Drawer,
     Table,
-    DatePicker,
+    Tag,
 } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import dayjs, { type Dayjs } from 'dayjs';
-import type { TrainingRelationRecord } from '@/types/training-link.types';
-import type { CourseRecord } from '@/types/course.types';
-import type { UserRecord } from '@/types/user.types';
+
+import {
+    EditOutlined,
+    DeleteOutlined,
+    PlusOutlined,
+} from '@ant-design/icons';
+
+
+import type {
+    TrainingRelationRecord,
+    TrainingRelationInput,
+} from '@/types/training-link.types';
+
+import type {
+    CourseRecord,
+} from '@/types/course.types';
+
+import type {
+    UserRecord,
+} from '@/types/user.types';
+import { ColumnsType } from 'antd/es/table';
+import { renderText } from '@/utils/renderText';
+import DataPage from '@/components/common/DataPage';
+
+
 
 const { Title, Text } = Typography;
 
-type RelationRow = TrainingRelationRecord & { key: string };
 
-interface RelationFormValues {
-    courseId: string;
-    mentorId: string;
-    discipleId: string;
-    startDate: Dayjs;
-    endDate?: Dayjs;
-    notes?: string;
-    status?: 'in_progress' | 'completed';
-}
 
-/** Dayjs → "YYYY-MM-DD" */
-function toDateString(d: Dayjs): string {
-    return d.format('YYYY-MM-DD');
-}
+type RelationRow =
+    TrainingRelationRecord & {
+        key:string;
+    };
 
-/** API string → Dayjs (for DatePicker pre-fill) */
-function toDayjs(value: string | null | undefined): Dayjs | undefined {
-    if (!value) return undefined;
-    const d = dayjs(value);
-    return d.isValid() ? d : undefined;
-}
 
-/** Display date in table: "DD/MM/YYYY" */
-function formatDate(value: string | null | undefined): string {
-    if (!value) return '-';
-    const d = dayjs(value);
-    return d.isValid() ? d.format('DD/MM/YYYY') : value;
-}
 
-export default function TrainingRelations() {
-    const { message } = App.useApp();
-    const [search, setSearch] = useState('');
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [editingRecord, setEditingRecord] = useState<RelationRow | null>(null);
-    const [saving, setSaving] = useState(false);
-    const [data, setData] = useState<RelationRow[]>([]);
-    const [courses, setCourses] = useState<CourseRecord[]>([]);
-    const [users, setUsers] = useState<UserRecord[]>([]);
-    const [form] = Form.useForm<RelationFormValues>();
-    const [loading, setLoading] = useState(false);
 
-    // ── Load initial data ──────────────────────────────────────────────────────
-    useEffect(() => {
-        void fetchData();
-    }, []);
+export default function TrainingRelations(){
 
-    const fetchData = async () => {
-        try {
-            setLoading(true);
+const [loading,setLoading] =
+    useState(false);
+    const {message} =
+        App.useApp();
 
-            const [relationsRes, coursesRes, usersRes] = await Promise.all([
+
+    const [search,setSearch] =
+        useState('');
+
+
+    const [open,setOpen] =
+        useState(false);
+
+
+    const [editing,setEditing] =
+        useState<RelationRow|null>(null);
+
+
+    const [relations,setRelations] =
+        useState<RelationRow[]>([]);
+
+
+    const [courses,setCourses] =
+        useState<CourseRecord[]>([]);
+
+
+    const [users,setUsers] =
+        useState<UserRecord[]>([]);
+
+
+    const [form] =
+        Form.useForm();
+
+
+
+
+    const loadData = async()=>{
+        setLoading(true);
+        try{
+
+
+            const [
+                relationRes,
+                courseRes,
+                userRes,
+
+            ] = await Promise.all([
+
                 fetch('/api/training-relations'),
+
                 fetch('/api/courses'),
+
                 fetch('/api/users'),
+
             ]);
 
-            const [relationsPayload, coursesPayload, usersPayload] = await Promise.all([
-                relationsRes.json(),
-                coursesRes.json(),
-                usersRes.json(),
+
+
+            const [
+                relationData,
+                courseData,
+                userData,
+
+            ] = await Promise.all([
+
+                relationRes.json(),
+
+                courseRes.json(),
+
+                userRes.json(),
+
             ]);
 
-            setData(
-                (relationsPayload.data ?? []).map((r: TrainingRelationRecord) => ({
-                    ...r,
-                    key: r.id,
-                })),
+
+
+            setRelations(
+
+                (relationData.data ?? [])
+                .map(
+                    (item:TrainingRelationRecord)=>({
+                        ...item,
+                        key:item.id
+                    })
+                )
+
             );
 
-            setCourses(coursesPayload.data ?? []);
-            setUsers(usersPayload.data ?? []);
-        } catch {
-            message.error('Failed to load training relations');
-        } finally {
+
+            setCourses(
+                courseData.data ?? []
+            );
+
+
+            setUsers(
+                userData.data ?? []
+            );
+
+
+        }catch{
+
+            message.error(
+                'Load data failed'
+            );
+
+        } finally{
+
             setLoading(false);
         }
+
     };
 
-    // ── Select / Status options ────────────────────────────────────────────────
-    // Mentors/disciples can be any user with the ADMIN or MENTOR role (multi-role aware).
-    const mentorOptions = useMemo(
-        () =>
-            users
-                .filter((u) => u.roles.includes('ADMIN') || u.roles.includes('MENTOR'))
-                .map((u) => ({ value: u.id, label: u.name })),
-        [users],
-    );
-    const discipleOptions = useMemo(
-        () => users.map((u) => ({ value: u.id, label: u.name })),
-        [users],
-    );
-    const courseOptions = useMemo(
-        () => courses.map((c) => ({ value: c.id, label: c.name })),
-        [courses],
-    );
-    const statusOptions = [
-        { value: 'in_progress', label: 'In Progress' },
-        { value: 'completed', label: 'Completed' },
-    ];
 
-    // ── Client-side search ─────────────────────────────────────────────────────
-    const filteredData = useMemo(() => {
-        if (!search) return data;
-        const kw = search.toLowerCase();
-        return data.filter((r) =>
-            [r.mentorName, r.discipleName, r.courseName, r.branchName]
-                .filter(Boolean)
-                .some((v) => String(v).toLowerCase().includes(kw)),
-        );
-    }, [data, search]);
 
-    // ── Drawer helpers ─────────────────────────────────────────────────────────
-    const openCreate = () => {
-        setEditingRecord(null);
+    useEffect(()=>{
+
+        loadData();
+
+    },[]);
+
+
+
+
+    const mentorOptions =
+        useMemo(()=>{
+
+
+            return users
+
+            .filter(user=>
+
+                user.roles?.includes('MENTOR')
+                ||
+                user.roles?.includes('ADMIN')
+
+            )
+
+            .map(user=>({
+
+                value:user.id,
+
+                label:user.name,
+
+            }));
+
+
+        },[users]);
+
+
+
+
+
+    const discipleOptions =
+        useMemo(()=>{
+
+
+            return users.map(user=>({
+
+                value:user.id,
+
+                label:user.name,
+
+            }));
+
+
+        },[users]);
+
+
+
+
+    const courseOptions =
+        useMemo(()=>{
+
+
+            return courses.map(course=>({
+
+                value:course.id,
+
+                label:course.name,
+
+            }));
+
+
+        },[courses]);
+
+
+
+
+
+
+    const filteredData =
+        relations.filter(item=>{
+
+
+            if(!search)
+                return true;
+
+
+            const keyword =
+                search.toLowerCase();
+
+
+
+            return [
+
+                item.mentorName,
+
+                item.discipleName,
+
+                item.courseName,
+
+                item.branchName,
+
+            ]
+
+            .filter(Boolean)
+
+            .some(value=>
+
+                String(value)
+                .toLowerCase()
+                .includes(keyword)
+
+            );
+
+
+        });
+
+
+
+
+
+
+
+    const openCreate = ()=>{
+
+        setEditing(null);
+
         form.resetFields();
-        form.setFieldsValue({ status: 'in_progress' });
-        setDrawerOpen(true);
+
+        setOpen(true);
+
     };
 
-    const openEdit = (record: RelationRow) => {
-        setEditingRecord(record);
+
+
+
+
+    const openEdit = (
+        record:RelationRow
+    )=>{
+
+
+        setEditing(record);
+
+
         form.setFieldsValue({
-            courseId: record.courseId,
-            mentorId: record.mentorId,
-            discipleId: record.discipleId,
-            startDate: toDayjs(record.startDate),
-            endDate: toDayjs(record.endDate),
-            status: record.status ?? 'in_progress',
-            notes: record.notes ?? undefined,
-        });
-        setDrawerOpen(true);
-    };
 
-    const closeDrawer = () => {
-        setDrawerOpen(false);
-        setEditingRecord(null);
-        form.resetFields();
-    };
+            courseId:
+                record.courseId,
 
-    // ── Create ─────────────────────────────────────────────────────────────────
-    const handleCreate = async (values: RelationFormValues) => {
-        const response = await fetch('/api/training-relations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                courseId: values.courseId,
-                mentorId: values.mentorId,
-                discipleId: values.discipleId,
-                startDate: toDateString(values.startDate),
-                endDate: values.endDate ? toDateString(values.endDate) : null,
-                status: values.status ?? 'in_progress',
-                notes: values.notes || null,
-                createdBy: null,
-            }),
+
+            mentorId:
+                record.mentorId,
+
+
+            discipleId:
+                record.discipleId,
+
+
+            startDate:
+                record.startDate,
+
+
+            endDate:
+                record.endDate,
+
+
+            notes:
+                record.notes,
+
         });
 
-        const result = await response.json();
-        if (!response.ok) throw new Error(result?.message ?? 'Failed to create relation');
 
-        const created: TrainingRelationRecord = result.data;
-        setData((prev) => [{ ...created, key: created.id }, ...prev]);
-        message.success('Training relation created');
+        setOpen(true);
+
     };
 
-    // ── Edit ──────────────────────────────────────────────────────────────────
-    const handleEdit = async (values: RelationFormValues, record: RelationRow) => {
-        const response = await fetch(`/api/training-relations/${record.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                courseId: values.courseId,
-                mentorId: values.mentorId,
-                discipleId: values.discipleId,
-                startDate: toDateString(values.startDate),
-                endDate: values.endDate ? toDateString(values.endDate) : null,
-                status: values.status ?? record.status,
-                notes: values.notes || null,
-            }),
-        });
 
-        if (!response.ok) {
-            const result = await response.json().catch(() => null);
-            throw new Error(result?.message ?? 'Failed to update relation');
+
+
+
+
+
+    const handleSave = async()=>{
+
+
+        try{
+
+
+            const values =
+                await form.validateFields();
+
+
+
+            const payload:TrainingRelationInput = {
+
+
+                courseId:
+                    values.courseId,
+
+
+                mentorId:
+                    values.mentorId,
+
+
+                discipleId:
+                    values.discipleId,
+
+
+                startDate:
+                    values.startDate,
+
+
+                endDate:
+                    values.endDate ?? null,
+
+
+                status:
+                    'in_progress',
+
+
+                notes:
+                    values.notes ?? null,
+
+
+            };
+
+
+
+            const url =
+                editing
+
+                ? `/api/training-relations/${editing.id}`
+
+                : '/api/training-relations';
+
+
+
+            const method =
+                editing
+                ? 'PUT'
+                : 'POST';
+
+
+
+
+            await fetch(
+                url,
+                {
+                    method,
+
+                    headers:{
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify(payload)
+                }
+            );
+
+
+
+            message.success(
+                editing
+                ? 'Updated'
+                : 'Created'
+            );
+
+
+
+            setOpen(false);
+
+            loadData();
+
+
+
+        }catch{
+
         }
 
-        const result = await response.json();
-        const updated: TrainingRelationRecord = result.data;
-        setData((prev) =>
-            prev.map((item) =>
-                item.id === record.id ? { ...updated, key: updated.id } : item,
-            ),
+
+    };
+
+
+
+
+
+
+
+
+    const handleDelete = async(
+        id:string
+    )=>{
+
+
+        await fetch(
+            `/api/training-relations/${id}`,
+            {
+                method:'DELETE'
+            }
         );
-        message.success('Training relation updated');
+
+
+        message.success(
+            'Deleted'
+        );
+
+
+        loadData();
+
     };
 
-    // ── Save handler ──────────────────────────────────────────────────────────
-    const handleSave = async () => {
-        try {
-            const values = await form.validateFields();
-            setSaving(true);
-            if (editingRecord) {
-                await handleEdit(values, editingRecord);
-            } else {
-                await handleCreate(values);
-            }
-            closeDrawer();
-        } catch (error) {
-            if (error instanceof Error) message.error(error.message);
-        } finally {
-            setSaving(false);
-        }
-    };
 
-    // ── Delete ─────────────────────────────────────────────────────────────────
-    const handleDelete = async (id: string) => {
-        try {
-            const response = await fetch(`/api/training-relations/${id}`, { method: 'DELETE' });
-            if (!response.ok) {
-                const result = await response.json();
-                throw new Error(result?.message ?? 'Failed to delete relation');
-            }
-            setData((prev) => prev.filter((item) => item.id !== id));
-            message.success('Relation deleted');
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : 'Failed to delete relation');
-        }
-    };
+const columns: ColumnsType<RelationRow> = [
+    {
+        title: 'Mentor',
+        dataIndex: 'mentorName',
+        width: 220,
+        ellipsis: true,
+        render: renderText,
+    },
 
-    // ── Table columns ──────────────────────────────────────────────────────────
-    const columns = [
-        {
-            title: 'Mentor',
-            dataIndex: 'mentorName',
-            sorter: (a: RelationRow, b: RelationRow) =>
-                (a.mentorName ?? '').localeCompare(b.mentorName ?? ''),
-            render: (value?: string) => (
-                <span className="font-medium text-[#24292f]">{value ?? '-'}</span>
-            ),
-        },
-        {
-            title: 'Disciple',
-            dataIndex: 'discipleName',
-            render: (value?: string) => (
-                <span className="text-[#24292f]">{value ?? '-'}</span>
-            ),
-        },
-        {
-            title: 'Course',
-            dataIndex: 'courseName',
-            render: (value?: string) => (
-                <span className="text-[#0969da] font-medium">{value ?? '-'}</span>
-            ),
-        },
-        {
-            title: 'Branch',
-            dataIndex: 'branchName',
-            render: (value?: string) => (
-                <span className="text-[#656d76]">{value ?? '-'}</span>
-            ),
-        },
-        {
-            title: 'Start Date',
-            dataIndex: 'startDate',
-            render: (value: string | null) => formatDate(value),
-        },
-        {
-            title: 'End Date',
-            dataIndex: 'endDate',
-            render: (value: string | null) => formatDate(value),
-        },
-        {
-            title: 'Status',
-            dataIndex: 'status',
-            render: (value: string) =>
-                value === 'completed' ? (
-                    <span className="text-green-600 font-medium">Completed</span>
-                ) : (
-                    <span className="text-blue-600 font-medium">In Progress</span>
-                ),
-        },
-        {
-            title: 'Created By',
-            dataIndex: 'createdBy',
-            render: (value: string | null) => (
-                <span className="text-[#656d76]">{value ?? '-'}</span>
-            ),
-        },
-        {
-            title: '',
-            key: 'actions',
-            width: 100,
-            align: 'right' as const,
-            render: (_: unknown, record: RelationRow) => (
-                <Space size={4}>
-                    <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => openEdit(record)}
-                    />
-                    <Popconfirm
-                        title="Delete this relation?"
-                        onConfirm={() => void handleDelete(record.id)}
-                    >
-                        <Button danger size="small" icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                </Space>
-            ),
-        },
-    ];
+    {
+        title: 'Disciple',
+        dataIndex: 'discipleName',
+        width: 220,
+        ellipsis: true,
+        render: renderText,
+    },
 
-    // ── Render ─────────────────────────────────────────────────────────────────
-    return (
-        <div className="space-y-4">
-            <Breadcrumb
-                items={[{ title: 'Administration' }, { title: 'Training Relations' }]}
-            />
+    {
+        title: 'Course',
+        dataIndex: 'courseName',
+        width: 260,
+        ellipsis: true,
+        render: renderText,
+    },
 
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <Title level={3} style={{ marginBottom: 0 }}>
-                        Training Relations
-                    </Title>
-                    <Text type="secondary">Manage discipleship relationships</Text>
-                </div>
-                <Space>
-                    <Button>Export</Button>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                        New Training Relation
-                    </Button>
-                </Space>
-            </div>
+    {
+        title: 'Branch',
+        dataIndex: 'branchName',
+        width: 180,
+        ellipsis: true,
+        render: renderText,
+    },
 
-            <Card>
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <Space wrap>
-                        <Input.Search
-                            allowClear
-                            placeholder="Search..."
-                            style={{ width: 280 }}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button onClick={() => void fetchData()} loading={loading}>
-                            Refresh
-                        </Button>
-                    </Space>
-                    <Space wrap>
-                        <Select
-                            allowClear
-                            placeholder="Course"
-                            style={{ width: 180 }}
-                            options={courseOptions}
-                        />
-                        <Select
-                            allowClear
-                            placeholder="Mentor"
-                            style={{ width: 180 }}
-                            options={mentorOptions}
-                        />
-                    </Space>
-                </div>
-            </Card>
+    {
+        title: 'Start Date',
+        dataIndex: 'startDate',
+        width: 140,
+        align: 'center',
+    },
 
-            <Card styles={{ body: { padding: 0 } }}>
-                <Table<RelationRow>
-                    rowKey="id"
-                    loading={loading}
-                    columns={columns}
-                    dataSource={filteredData}
-                    pagination={{
-                        showSizeChanger: true,
-                        pageSizeOptions: ['10', '20', '50', '100'],
-                        showTotal: (total) => `${total} items`,
-                    }}
-                />
-            </Card>
+    {
+        title: 'End Date',
+        dataIndex: 'endDate',
+        width: 140,
+        align: 'center',
+        render: (v: string | null) => v ?? '-',
+    },
 
-            {/* ── Create / Edit Drawer ── */}
-            <Drawer
-                open={drawerOpen}
-                title={editingRecord ? 'Edit Training Relation' : 'Create Training Relation'}
-                placement="right"
-                size="large"
-                onClose={closeDrawer}
-                footer={
-                    <Space style={{ width: '100%', justifyContent: 'end' }}>
-                        <Button onClick={closeDrawer}>Cancel</Button>
-                        <Button type="primary" loading={saving} onClick={handleSave}>
-                            Save
-                        </Button>
-                    </Space>
+    {
+        title: 'Status',
+        dataIndex: 'status',
+        width: 140,
+        align: 'center',
+        render: (status: string) => (
+            <Tag
+                color={
+                    status === 'COMPLETED'
+                        ? 'green'
+                        : status === 'IN_PROGRESS'
+                        ? 'blue'
+                        : 'default'
                 }
             >
-                <Form form={form} layout="vertical">
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            label="Course"
-                            name="courseId"
-                            rules={[{ required: true, message: 'Please select a course' }]}
-                        >
-                            <Select placeholder="Select course" options={courseOptions} />
-                        </Form.Item>
+                {status}
+            </Tag>
+        ),
+    },
 
-                        <Form.Item
-                            label="Mentor"
-                            name="mentorId"
-                            rules={[{ required: true, message: 'Please select a mentor' }]}
-                        >
-                            <Select placeholder="Select mentor" options={mentorOptions} />
-                        </Form.Item>
-                    </div>
+    {
+        title: 'Actions',
+        width: 120,
+        fixed: 'right',
+        align: 'center',
+        render: (_: unknown, row: RelationRow) => (
+            <Space size={4}>
+                <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => openEdit(row)}
+                />
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            label="Disciple"
-                            name="discipleId"
-                            rules={[{ required: true, message: 'Please select a disciple' }]}
-                        >
-                            <Select placeholder="Select disciple" options={discipleOptions} />
-                        </Form.Item>
+                <Popconfirm
+                    title="Delete relation?"
+                    onConfirm={() => handleDelete(row.id)}
+                >
+                    <Button
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                    />
+                </Popconfirm>
+            </Space>
+        ),
+    },
+];
+    return (
 
-                        <Form.Item
-                            label="Status"
-                            name="status"
-                            rules={[{ required: true, message: 'Please select a status' }]}
-                        >
-                            <Select options={statusOptions} />
-                        </Form.Item>
-                    </div>
+        <div className="space-y-4">
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Form.Item
-                            label="Start Date"
-                            name="startDate"
-                            rules={[{ required: true, message: 'Please select a start date' }]}
-                        >
-                            <DatePicker
-                                style={{ width: '100%' }}
-                                format="MM/YYYY"
-                                picker="month"
-                                placeholder="Select start date"
-                            />
-                        </Form.Item>
 
-                        <Form.Item
-                            label="End Date"
-                            name="endDate"
-                            dependencies={['startDate']}
-                            rules={[
-                                ({ getFieldValue }) => ({
-                                    validator(_, value: Dayjs | undefined) {
-                                        const start: Dayjs | undefined = getFieldValue('startDate');
-                                        if (!value || !start || value.isAfter(start)) {
-                                            return Promise.resolve();
-                                        }
-                                        return Promise.reject(
-                                            new Error('End date must be after start date'),
-                                        );
-                                    },
-                                }),
-                            ]}
-                        >
-                            <DatePicker
-                                style={{ width: '100%' }}
-                                format="MM/YYYY"
-                                picker="month"
-                                placeholder="Select end date (optional)"
-                            />
-                        </Form.Item>
-                    </div>
 
-                    <Form.Item label="Notes" name="notes">
-                        <Input.TextArea rows={4} placeholder="Optional notes..." />
+
+
+
+
+            <DataPage<RelationRow>
+    title="Training Relations"
+    subtitle="Manage mentor-disciple training relationships"
+    columns={columns}
+    dataSource={filteredData}
+    searchable
+    loading={loading}
+    // onSearch={(keyword) => {
+    //     setKeyword(keyword);
+    // }}
+    // onRefresh={() => {
+    //     void loadRelations();
+    // }}
+/>
+
+
+
+
+
+
+
+
+            <Drawer
+
+                open={open}
+
+                size="large"
+
+                title={
+                    editing
+                    ? 'Edit'
+                    : 'Create'
+                }
+
+                onClose={()=>{
+                    setOpen(false)
+                }}
+
+
+                footer={
+
+                    <Button
+                        type="primary"
+                        onClick={handleSave}
+                    >
+                        Save
+                    </Button>
+
+                }
+
+            >
+
+
+                <Form
+                    form={form}
+                    layout="vertical"
+                >
+
+
+                    <Form.Item
+                        label="Course"
+                        name="courseId"
+                        rules={[
+                            {
+                                required:true
+                            }
+                        ]}
+                    >
+
+                        <Select
+                            options={courseOptions}
+                        />
+
                     </Form.Item>
+
+
+
+                    <Form.Item
+                        label="Mentor"
+                        name="mentorId"
+                        rules={[
+                            {
+                                required:true
+                            }
+                        ]}
+                    >
+
+                        <Select
+                            options={mentorOptions}
+                        />
+
+                    </Form.Item>
+
+
+
+                    <Form.Item
+                        label="Disciple"
+                        name="discipleId"
+                        rules={[
+                            {
+                                required:true
+                            }
+                        ]}
+                    >
+
+                        <Select
+                            options={discipleOptions}
+                        />
+
+                    </Form.Item>
+
+
+
+
+                    <Form.Item
+                        label="Start Date"
+                        name="startDate"
+                        rules={[
+                            {
+                                required:true
+                            }
+                        ]}
+                    >
+
+                        <Input placeholder="YYYY-MM-DD"/>
+
+                    </Form.Item>
+
+
+
+                    <Form.Item
+                        label="End Date"
+                        name="endDate"
+                    >
+
+                        <Input placeholder="YYYY-MM-DD"/>
+
+                    </Form.Item>
+
+
+
+                    <Form.Item
+                        label="Notes"
+                        name="notes"
+                    >
+
+                        <Input.TextArea rows={4}/>
+
+                    </Form.Item>
+
+
                 </Form>
+
+
             </Drawer>
+
+
         </div>
+
     );
+
 }

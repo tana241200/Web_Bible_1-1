@@ -1,26 +1,90 @@
-import type { RoleCode } from '@/types/auth.types';
+import type { RoleCode, UserStatus } from './database.types';
+
 
 export interface UserRecord {
+
     id: string;
-    name: string;
-    birthDate: string | null;
-    branchId: string | null;
-    branchName?: string | null;
+
     email: string;
+
+
+    /**
+     * users.full_name
+     */
+    fullName: string;
+
+
+    /**
+     * users.birth_date
+     */
+    birthDate: string | null;
+
+
+    /**
+     * users.branch_id
+     */
+    branchId: string | null;
+
+
+    /**
+     * join branches.name
+     */
+    branchName?: string | null;
+
+
+    /**
+     * RBAC:
+     * user_roles -> roles.code
+     */
     roles: RoleCode[];
-    status: string;
-    avatar: string | null;
-    phone?: string | null;
+
+
+    /**
+     * users.status
+     */
+    status: UserStatus;
+
+
+    /**
+     * users.avatar_url
+     */
+    avatarUrl: string | null;
+
+
+    /**
+     * users.phone
+     */
+    phone: string | null;
 }
 
+
+
 export interface UserInput {
-    name: string;
-    birthDate?: string | null;
-    branchId?: string | null;
+
+
     email: string;
+
+
+    fullName: string;
+
+
+    birthDate?: string | null;
+
+
+    branchId?: string | null;
+
+
     passwordHash?: string;
+
+
     roles?: RoleCode[];
-    status?: string;
-    avatar?: string | null;
+
+
+    status?: UserStatus;
+
+
+    avatarUrl?: string | null;
+
+
     phone?: string | null;
 }

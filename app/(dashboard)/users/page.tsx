@@ -26,7 +26,8 @@ import {
 } from '@ant-design/icons';
 
 import type { UserRecord } from '@/types/user.types';
-import type { RoleCode } from '@/types/auth.types';
+import { RoleCode } from '@/types/database.types';
+import DataPage from '@/components/common/DataPage';
 
 const { Title, Text } = Typography;
 
@@ -200,6 +201,7 @@ export default function UsersPage() {
             email: record.email,
             roles: record.roles,
             branchId: record.branchId,
+            status: record.status,
         });
 
         setOpen(true);
@@ -214,6 +216,7 @@ export default function UsersPage() {
                 email: values.email,
                 roles: values.roles as RoleCode[],
                 branchId: values.branchId,
+                status: values.status,
             };
 
             if (editingRecord) {
@@ -405,135 +408,189 @@ export default function UsersPage() {
 
     return (
         <>
-            <Breadcrumb
-                items={[{ title: 'Administration' }, { title: 'Users' }]}
+           
+    
+<DataPage<UserTableRecord>
+    title="Users"
+    subtitle="Manage system users"
+    breadcrumbs={['Administration', 'Users']}
+    loading={loading}
+    columns={columns}
+    dataSource={filteredData}
+    onRefresh={() => void loadUsers()}
+    searchable
+    searchPlaceholder="Search users..."
+    onSearch={setSearch}
+    actions={
+        <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreate}
+        >
+            New User
+        </Button>
+    }
+    filters={
+        <>
+            <Select
+                allowClear
+                placeholder="Branch"
+                style={{ width: 180 }}
+                options={branchFilterOptions}
+                onChange={setBranchFilter}
             />
 
-            <div className="flex justify-between mb-4">
-                <div>
-                    <Title level={3}>Users</Title>
-                    <Text type="secondary">Manage system users</Text>
-                </div>
-
-                <Space>
-                    <Button onClick={() => void loadUsers()}>Refresh</Button>
-
-                    <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={openCreate}
-                    >
-                        New User
-                    </Button>
-                </Space>
-            </div>
-
-            <Space wrap className="mb-4">
-                <Input.Search
-                    placeholder="Search"
-                    allowClear
-                    style={{ width: 280 }}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-
-                <Select
-                    allowClear
-                    placeholder="Branch"
-                    style={{ width: 180 }}
-                    options={branchFilterOptions}
-                    onChange={setBranchFilter}
-                />
-
-                <Select
-                    allowClear
-                    placeholder="Role"
-                    style={{ width: 140 }}
-                    onChange={setRoleFilter}
-                    options={ROLE_OPTIONS}
-                />
-
-                <Select
-                    allowClear
-                    placeholder="Status"
-                    style={{ width: 140 }}
-                    onChange={setStatusFilter}
-                    options={[
-                        { value: 'active', label: 'Active' },
-                        { value: 'inactive', label: 'Inactive' },
-                        { value: 'pending', label: 'Pending' },
-                    ]}
-                />
-            </Space>
-
-            <Table<UserTableRecord>
-                rowKey="id"
-                loading={loading}
-                columns={columns}
-                dataSource={filteredData}
+            <Select
+                allowClear
+                placeholder="Role"
+                style={{ width: 140 }}
+                onChange={setRoleFilter}
+                options={ROLE_OPTIONS}
             />
 
-            <Modal
-                open={open}
-                width={520}
-                title={editingRecord ? 'Edit User' : 'Create User'}
-                onCancel={() => setOpen(false)}
-                onOk={handleSave}
-                okText="Save"
-            >
-                <Form form={form} layout="vertical" className="mt-4">
-                    <Form.Item
-                        name="name"
-                        label="Full Name"
-                        rules={[{ required: true }]}
-                    >
-                        <Input />
-                    </Form.Item>
+            <Select
+                allowClear
+                placeholder="Status"
+                style={{ width: 140 }}
+                onChange={setStatusFilter}
+                options={[
+                    {
+                        value: 'active',
+                        label: 'Active',
+                    },
+                    {
+                        value: 'inactive',
+                        label: 'Inactive',
+                    },
+                    {
+                        value: 'pending',
+                        label: 'Pending',
+                    },
+                ]}
+            />
+        </>
+    }
+    tableProps={{
+        size: 'middle',
+        sticky: true,
+        scroll: {
+            x: 1200,
+        },
+    }}
+/>
+<Modal
+    open={open}
+    width={520}
+    title={
+        editingRecord
+            ? 'Edit User'
+            : 'Create User'
+    }
+    onCancel={() => setOpen(false)}
+    onOk={handleSave}
+    okText="Save"
+>
+    <Form
+        form={form}
+        layout="vertical"
+        className="mt-4"
+    >
+        <Form.Item
+            name="name"
+            label="Full Name"
+            rules={[
+                {
+                    required: true,
+                },
+            ]}
+        >
+            <Input />
+        </Form.Item>
 
-                    <Form.Item
-                        name="email"
-                        label="Email"
-                        rules={[{ required: true, type: 'email' }]}
-                    >
-                        <Input />
-                    </Form.Item>
+        <Form.Item
+            name="email"
+            label="Email"
+            rules={[
+                {
+                    required: true,
+                    type: 'email',
+                },
+            ]}
+        >
+            <Input />
+        </Form.Item>
 
-                    <Form.Item
-                        name="branchId"
-                        label="Branch"
-                        rules={[
-                            {
-                                required: true,
-                                message: 'Branch is required',
-                            },
-                        ]}
-                    >
-                        <Select
-                            loading={branchLoading}
-                            placeholder="Select branch"
-                            options={branchOptions}
-                            showSearch
-                            optionFilterProp="label"
-                        />
-                    </Form.Item>
+        <Form.Item
+            name="branchId"
+            label="Branch"
+            rules={[
+                {
+                    required: true,
+                    message:
+                        'Branch is required',
+                },
+            ]}
+        >
+            <Select
+                loading={branchLoading}
+                placeholder="Select branch"
+                options={branchOptions}
+                showSearch
+                optionFilterProp="label"
+            />
+        </Form.Item>
 
-                    <Form.Item
-                        name="roles"
-                        label="Roles"
-                        rules={[
-                            {
-                                required: true,
-                                message: 'At least one role is required',
-                            },
-                        ]}
-                    >
-                        <Select
-                            mode="multiple"
-                            placeholder="Select roles"
-                            options={ROLE_OPTIONS}
-                        />
-                    </Form.Item>
-                </Form>
-            </Modal>
+        <Form.Item
+            name="roles"
+            label="Roles"
+            rules={[
+                {
+                    required: true,
+                    message:
+                        'At least one role is required',
+                },
+            ]}
+        >
+            <Select
+                mode="multiple"
+                placeholder="Select roles"
+                options={ROLE_OPTIONS}
+            />
+        </Form.Item>
+
+        <Form.Item
+            name="status"
+            label="Status"
+            initialValue="active"
+            rules={[
+                {
+                    required: true,
+                    message:
+                        'Status is required',
+                },
+            ]}
+        >
+            <Select
+                options={[
+                    {
+                        value: 'active',
+                        label: 'Active',
+                    },
+                    {
+                        value: 'inactive',
+                        label: 'Inactive',
+                    },
+                    {
+                        value: 'pending',
+                        label: 'Pending',
+                    },
+                ]}
+            />
+        </Form.Item>
+    </Form>
+</Modal>
+
+
         </>
     );
 }

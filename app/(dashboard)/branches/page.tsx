@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Typography, Button, Space, Tag, Modal, Form, Input, App } from 'antd';
+import { Typography, Button, Space, Tag, Modal, Form, Input, App, Tooltip } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, BankOutlined } from '@ant-design/icons';
 import DataPage from '@/components/common/DataPage';
-import type { BranchRecord, ColumnsType } from '@/types/branch.types';
+import type { BranchRecord } from '@/types/branch.types';
+import { ColumnsType } from 'antd/es/table';
 const { Title, Text } = Typography;
 type BranchTableRecord = BranchRecord & { status: 'active' | 'inactive' };
 export default function BranchesPage() {
@@ -13,9 +14,11 @@ export default function BranchesPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<BranchTableRecord | null>(null);
     const [form] = Form.useForm();
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         void (async () => {
+            setLoading(true);
             try {
                 const response = await fetch('/api/branches');
                 const payload = await response.json();
@@ -25,6 +28,8 @@ export default function BranchesPage() {
                 })));
             } catch {
                 message.error('Failed to load branches');
+            } finally {
+                setLoading(false);
             }
         })();
     }, [message]);
@@ -155,99 +160,7 @@ const loadBranches = async () => {
     message.error('Failed to load branches');
   }
 };
-    const columns: ColumnsType<BranchTableRecord> = [
-        {
-            title: 'Branch',
-            dataIndex: 'name',
-            key: 'name',
-            render: (value: string) => (
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-md border border-[#d0d7de] bg-[#f6f8fa] flex items-center justify-center">
-                        <BankOutlined className="text-[#656d76]" />
-                    </div>
-                    <div>
-                        <div className="font-medium text-[#24292f]">
-                            {value}
-                        </div>
-                    </div>
-                </div>
-            ),
-        },
-        {
-            title: 'City',
-            dataIndex: 'city',
-            key: 'city',
-            width: 160,
-        },
-        {
-            title: 'Members',
-            dataIndex: 'members',
-            key: 'members',
-            width: 120,
-            sorter: (a: BranchRecord, b: BranchRecord) =>
-                (a.members ?? 0) - (b.members ?? 0),
-            render: (value: number | undefined) => (
-                <span className="font-medium">{(value ?? 0).toLocaleString()}</span>
-            ),
-        },
-        {
-            title: 'Mentors',
-            dataIndex: 'mentors',
-            key: 'mentors',
-            width: 120,
-            render: (value: number | undefined) => (
-                <Tag variant="filled" color="blue">
-                    {value ?? 0}
-                </Tag>
-            ),
-        },
-        {
-            title: 'Trainings',
-            dataIndex: 'trainings',
-            key: 'trainings',
-            width: 140,
-            render: (value: number | undefined) => (
-                <Tag variant="filled" color="green">
-                    {(value ?? 0).toLocaleString()}
-                </Tag>
-            ),
-        },
-        {
-            title: 'Status',
-            dataIndex: 'status',
-            key: 'status',
-            width: 140,
-            render: (value: string) => (
-                <Tag
-                    variant="filled"
-                    color={value === 'active' ? 'success' : 'default'}
-                >
-                    {value === 'active' ? 'Active' : 'Inactive'}
-                </Tag>
-            ),
-        },
-        {
-            title: '',
-            key: 'actions',
-            width: 120,
-            align: 'right' as const,
-                render: (_: unknown, record: BranchTableRecord) => (
-                <Space size={4}>
-                    <Button
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => openEdit(record)}
-                    />
-                    <Button
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => handleDelete(record.id)}
-                    />
-                </Space>
-            ),
-        },
-    ];
+    const columns: ColumnsType<BranchTableRecord> = [ { title: 'Branch', dataIndex: 'name', key: 'name', width: 320, ellipsis: true, render: (value: string) => ( <div className="flex items-center gap-3 min-w-0"> <div className="w-8 h-8 shrink-0 rounded-md border border-[#d0d7de] bg-[#f6f8fa] flex items-center justify-center"> <BankOutlined className="text-[#656d76]" /> </div> <div className="min-w-0 flex-1"> <Tooltip title={value}> <div className="font-medium text-[#24292f] truncate"> {value} </div> </Tooltip> </div> </div> ), }, { title: 'City', dataIndex: 'city', key: 'city', width: 180, ellipsis: { showTitle: false, }, render: (value?: string) => ( <Tooltip title={value}> <span className="truncate block"> {value ?? '-'} </span> </Tooltip> ), }, { title: 'Members', dataIndex: 'members', key: 'members', width: 130, align: 'center', sorter: ( a: BranchTableRecord, b: BranchTableRecord, ) => (a.members ?? 0) - (b.members ?? 0), render: (value?: number) => ( <span className="font-medium"> {(value ?? 0).toLocaleString()} </span> ), }, { title: 'Mentors', dataIndex: 'mentors', key: 'mentors', width: 120, align: 'center', render: (value?: number) => ( <Tag color="blue"> {value ?? 0} </Tag> ), }, { title: 'Trainings', dataIndex: 'trainings', key: 'trainings', width: 140, align: 'center', render: (value?: number) => ( <Tag color="green"> {(value ?? 0).toLocaleString()} </Tag> ), }, { title: 'Status', dataIndex: 'status', key: 'status', width: 130, align: 'center', render: (value: string) => ( <Tag color={ value === 'active' ? 'success' : 'default' } > {value === 'active' ? 'Active' : 'Inactive'} </Tag> ), }, { title: 'Actions', key: 'actions', width: 120, fixed: 'right', align: 'center', render: ( _: unknown, record: BranchTableRecord, ) => ( <Space size={4}> <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record) } /> <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id) } /> </Space> ), }, ];
         return (
         <div className="space-y-4">
             {/* Header */}
@@ -256,6 +169,7 @@ const loadBranches = async () => {
             {/* Table */}
             <DataPage<BranchTableRecord>
                 title="Branches"
+                loading={loading}
                 subtitle="Manage church branches and training centers"
                 breadcrumbs={[
                     'Administration',

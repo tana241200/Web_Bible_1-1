@@ -3,32 +3,43 @@ import './globals.css';
 
 import { App, ConfigProvider } from 'antd';
 
-import AppLayout from '@/components/layout/AppLayout';
 import GlobalThemeConfig from '@/configs/theme.global.json';
+import { getAccessToken } from '@/utils/helpers';
+import AppLayout from '@/components/layout/AppLayout';
+
 export const metadata: Metadata = {
-    title: 'Tree Management System',
-    description:
-        'A system to manage discipleship trees and training resources.',
+  title: 'Bible Discipleship System',
+  description: 'Bible Discipleship Tree Management System',
 };
 
-export default function RootLayout({
-    children,
+export default async function RootLayout({
+  children,
 }: Readonly<{
-    children: React.ReactNode;
+  children: React.ReactNode;
 }>) {
-    return (
-        <html lang="en">
-            <body>
-                <ConfigProvider theme={GlobalThemeConfig}
-                notification={{ style: { top: '80px' } }}
-                form={{  validateMessages: { required: 'This field is required!' } }}>
-                    <App>
-                        <AppLayout>
-                            {children}
-                        </AppLayout>
-                    </App>
-                </ConfigProvider>
-            </body>
-        </html>
-    );
+  const accessToken = await getAccessToken();
+
+  return (
+    <html lang="en">
+      <body>
+        <ConfigProvider
+          theme={GlobalThemeConfig}
+          notification={{ style: { top: '80px' } }}
+          form={{
+            validateMessages: {
+              required: 'This field is required!',
+            },
+          }}
+        >
+          <App>
+            {accessToken ? (
+              <AppLayout>{children}</AppLayout>
+            ) : (
+              children
+            )}
+          </App>
+        </ConfigProvider>
+      </body>
+    </html>
+  );
 }
