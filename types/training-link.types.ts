@@ -10,10 +10,10 @@ export interface TrainingRelationRecord {
     discipleId: string;
     discipleName?: string;
     branchName?: string;
-    /** ISO date string "YYYY-MM-DD" */
-    startDate: string;
-    /** ISO date string "YYYY-MM-DD" or null */
-    endDate: string | null;
+    /** ISO date string "YYYY-MM-DD" — stored as start_month in DB */
+    startMonth: string;
+    /** ISO date string "YYYY-MM-DD" or null — stored as end_month in DB */
+    endMonth: string | null;
     status: 'in_progress' | 'completed';
     notes: string | null;
     createdBy: string | null;
@@ -29,9 +29,9 @@ export interface TrainingRelationInput {
     mentorId: string;
     discipleId: string;
     /** ISO date string "YYYY-MM-DD" */
-    startDate: string;
+    startMonth: string;
     /** ISO date string "YYYY-MM-DD" — optional */
-    endDate?: string | null;
+    endMonth?: string | null;
     status?: 'in_progress' | 'completed';
     notes?: string | null;
     createdBy?: string | null;
