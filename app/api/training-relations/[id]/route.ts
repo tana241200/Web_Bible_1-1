@@ -1,4 +1,3 @@
-// app/api/training-relations/[id]/route.ts
 import { NextRequest } from 'next/server';
 
 import { ApiError } from '@/lib/api/api-error';
@@ -11,13 +10,14 @@ import type {
     TrainingRelationRecord,
 } from '@/types/training-link.types';
 
+// DB columns: start_date / end_date (per seed2.sql / database.types.ts)
 type RelationRow = {
     id: string;
     course_id: string;
     mentor_id: string;
     disciple_id: string;
-    start_month: string;
-    end_month: string | null;
+    start_date: string;
+    end_date: string | null;
     status: 'in_progress' | 'completed';
     notes: string | null;
     created_by: string | null;
@@ -49,8 +49,8 @@ function mapRelation(
         branchName: mentorBranchId
             ? refs.branchNames.get(mentorBranchId)
             : undefined,
-        startMonth: row.start_month,
-        endMonth: row.end_month,
+        startDate: row.start_date,
+        endDate: row.end_date,
         status: row.status,
         notes: row.notes,
         createdBy: row.created_by,
@@ -143,13 +143,13 @@ export async function PATCH(
             payload.mentor_id = requireString(body.mentorId, 'mentorId');
         if (body.discipleId !== undefined)
             payload.disciple_id = requireString(body.discipleId, 'discipleId');
-        if (body.startMonth !== undefined)
-            payload.start_month = requireString(body.startMonth, 'startMonth');
+        if (body.startDate !== undefined)
+            payload.start_date = requireString(body.startDate, 'startDate');
 
-        const endMonth = optionalString(body.endMonth);
+        const endDate = optionalString(body.endDate);
         const notes = optionalString(body.notes);
 
-        if (endMonth !== undefined) payload.end_month = endMonth;
+        if (endDate !== undefined) payload.end_date = endDate;
         if (notes !== undefined) payload.notes = notes;
         if (body.status !== undefined) payload.status = body.status;
         if (body.createdBy !== undefined) payload.created_by = body.createdBy;
