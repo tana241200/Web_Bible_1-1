@@ -4,8 +4,7 @@ import { ApiError } from '@/lib/api/api-error';
 import { optionalString, readJsonBody, requireString } from '@/lib/api/validation';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { UserInput, UserRecord } from '@/types/user.types';
-import type { RoleCode } from '@/types/auth.types';
-import type { Database, UserStatus } from '@/types/database.types';
+import type { Database, RoleCode, UserStatus } from '@/types/database.types';
 
 const userStatuses = new Set<UserStatus>(['active', 'inactive', 'pending']);
 
@@ -27,14 +26,14 @@ function mapUser(row: UserRow, branchName?: string | null): UserRecord {
         .filter((c): c is RoleCode => Boolean(c));
     return {
         id: row.id,
-        name: row.full_name,
+        fullName: row.full_name,
         birthDate: row.birth_date,
         branchId: row.branch_id,
         branchName: branchName ?? null,
         email: row.email,
         roles,
         status: row.status,
-        avatar: row.avatar_url,
+        avatarUrl: row.avatar_url,
         phone: row.phone,
     };
 }
@@ -79,7 +78,7 @@ export async function PATCH(
         const body = await readJsonBody<Partial<UserInput>>(request);
 
         const payload: Database['public']['Tables']['users']['Update'] = {};
-        if (body.name !== undefined) payload.full_name = requireString(body.name, 'name');
+        if (body.fullName !== undefined) payload.full_name = requireString(body.fullName, 'fullName');
         if (body.birthDate !== undefined) payload.birth_date = body.birthDate;
         if (body.branchId !== undefined) payload.branch_id = body.branchId;
         if (body.email !== undefined) payload.email = requireString(body.email, 'email');
@@ -89,7 +88,7 @@ export async function PATCH(
                 throw new ApiError('Invalid user status.', 400);
             payload.status = body.status as UserStatus;
         }
-        const avatar = optionalString(body.avatar);
+        const avatar = optionalString(body.avatarUrl);
         const phone = optionalString(body.phone);
         if (avatar !== undefined) payload.avatar_url = avatar;
         if (phone !== undefined) payload.phone = phone;

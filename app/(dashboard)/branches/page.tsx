@@ -125,6 +125,7 @@ export default function BranchesPage() {
                 },
                 body: JSON.stringify({
                     name: values.name,
+                    code: values.code,
                     city: values.city,
                     isActive: true,
                 }),
@@ -214,14 +215,16 @@ const loadBranches = async () => {
                     className="mt-4"
                 >
                     <Form.Item
+                        name="code"
+                        label="Branch Code"
+                        rules={[{ required: true, message: 'Branch code is required' }]}
+                    >
+                        <Input placeholder="HAN" style={{ textTransform: 'uppercase' }} />
+                    </Form.Item>
+                    <Form.Item
                         name="name"
                         label="Branch Name"
-                        rules={[
-                            {
-                                required: true,
-                                message: 'Branch name is required',
-                            },
-                        ]}
+                        rules={[{ required: true, message: 'Branch name is required' }]}
                     >
                         <Input placeholder="Chi nhánh Hà Nội" />
                     </Form.Item>

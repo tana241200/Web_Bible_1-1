@@ -177,7 +177,7 @@ export default function SubjectsPage() {
         );
     };
 
-    const saveEdit = (id: string) => {
+    const saveEdit = async (id: string) => {
         const target = data.find((item) => item.id === id);
 
         if (!target?.tempName?.trim()) {
@@ -185,35 +185,43 @@ export default function SubjectsPage() {
             return;
         }
 
-        setData((prev) =>
-            prev.map((item) =>
-                item.id === id
-                    ? {
-                          ...item,
-                          name: item.tempName!.trim(),
-                          editing: false,
-                          tempName: undefined,
-                      }
-                    : item,
-            ),
-        );
+        try {
+            const response = await fetch(`/api/courses/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: target.tempName.trim() }),
+            });
 
-        message.success('Course updated');
+            if (!response.ok) throw new Error('Failed to update course');
+
+            setData((prev) =>
+                prev.map((item) =>
+                    item.id === id
+                        ? { ...item, name: item.tempName!.trim(), editing: false, tempName: undefined }
+                        : item,
+                ),
+            );
+
+            message.success('Course updated');
+        } catch {
+            message.error('Failed to update course');
+        }
     };
 
     const deleteSubject = (id: string) => {
         modal.confirm({
             title: 'Delete course?',
             content: 'This action cannot be undone.',
-            okButtonProps: {
-                danger: true,
-            },
-            onOk() {
-                setData((prev) =>
-                    prev.filter((item) => item.id !== id),
-                );
-
-                message.success('Course deleted');
+            okButtonProps: { danger: true },
+            async onOk() {
+                try {
+                    const response = await fetch(`/api/courses/${id}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Failed to delete course');
+                    setData((prev) => prev.filter((item) => item.id !== id));
+                    message.success('Course deleted');
+                } catch {
+                    message.error('Failed to delete course');
+                }
             },
         });
     };

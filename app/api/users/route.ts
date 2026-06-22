@@ -4,8 +4,7 @@ import { ApiError } from '@/lib/api/api-error';
 import { optionalString, readJsonBody, requireString } from '@/lib/api/validation';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import type { UserInput, UserRecord } from '@/types/user.types';
-import type { RoleCode } from '@/types/auth.types';
-import type { UserStatus } from '@/types/database.types';
+import type { RoleCode, UserStatus } from '@/types/database.types';
 
 const userStatuses = new Set<UserStatus>(['active', 'inactive', 'pending']);
 
@@ -23,14 +22,14 @@ function mapUser(
         .filter((c): c is RoleCode => Boolean(c));
     return {
         id: row.id,
-        name: row.full_name,
+        fullName: row.full_name,
         birthDate: row.birth_date,
         branchId: row.branch_id,
         branchName: branchName ?? null,
         email: row.email,
         roles,
         status: row.status,
-        avatar: row.avatar_url,
+        avatarUrl: row.avatar_url,
         phone: row.phone,
     };
 }
@@ -106,11 +105,11 @@ export async function POST(request: NextRequest) {
         const payload = {
             email: requireString(body.email, 'email'),
             password_hash: body.passwordHash ?? 'seeded',
-            full_name: requireString(body.name, 'name'),
+            full_name: requireString(body.fullName, 'fullName'),
             birth_date: body.birthDate ?? null,
             branch_id: body.branchId ?? null,
             status: normalizeStatus(body.status),
-            avatar_url: optionalString(body.avatar),
+            avatar_url: optionalString(body.avatarUrl),
             phone: optionalString(body.phone),
         };
 

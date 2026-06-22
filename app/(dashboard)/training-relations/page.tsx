@@ -27,6 +27,7 @@ import {
 
 import type {
     TrainingRelationRecord,
+    TrainingRelationInput,
 } from '@/types/training-link.types';
 
 import type {
@@ -93,8 +94,8 @@ const [loading,setLoading] =
 
 
     const loadData = async()=>{
-        setLoading(true);
         try{
+        setLoading(true);
 
 
             const [
@@ -196,7 +197,7 @@ const [loading,setLoading] =
 
                 value:user.id,
 
-                label:user.name,
+                label:user.fullName,
 
             }));
 
@@ -215,7 +216,7 @@ const [loading,setLoading] =
 
                 value:user.id,
 
-                label:user.name,
+                label:user.fullName,
 
             }));
 
@@ -360,7 +361,7 @@ const [loading,setLoading] =
 
 
 
-            const payload:TrainingRelationRecord = {
+            const payload:TrainingRelationInput = {
 
 
                 courseId:

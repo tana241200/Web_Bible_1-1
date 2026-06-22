@@ -9,6 +9,9 @@ import type {
     TrainingRelationInput,
     TrainingRelationRecord,
 } from '@/types/training-link.types';
+import type { Database } from '@/types/database.types';
+
+type TrainingLinkUpdate = Database['public']['Tables']['training_links']['Update'];
 
 // DB columns: start_date / end_date (per seed2.sql / database.types.ts)
 type RelationRow = {
@@ -135,7 +138,7 @@ export async function PATCH(
 
         const body = await readJsonBody<Partial<TrainingRelationInput>>(request);
 
-        const payload: Record<string, unknown> = {};
+        const payload: TrainingLinkUpdate = {};
 
         if (body.courseId !== undefined)
             payload.course_id = requireString(body.courseId, 'courseId');

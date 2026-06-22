@@ -155,7 +155,7 @@ export default function UsersPage() {
         return data.filter((user) => {
             if (
                 search &&
-                !user.name.toLowerCase().includes(search.toLowerCase()) &&
+                !user.fullName.toLowerCase().includes(search.toLowerCase()) &&
                 !user.email.toLowerCase().includes(search.toLowerCase())
             ) {
                 return false;
@@ -197,7 +197,7 @@ export default function UsersPage() {
         setEditingRecord(record);
 
         form.setFieldsValue({
-            name: record.name,
+            name: record.fullName,
             email: record.email,
             roles: record.roles,
             branchId: record.branchId,
@@ -324,7 +324,7 @@ export default function UsersPage() {
                 <div className="flex items-center gap-3">
                     <Avatar size={32} icon={<UserOutlined />} />
                     <div>
-                        <div className="font-medium">{record.name}</div>
+                        <div className="font-medium">{record.fullName}</div>
                         <div className="text-xs text-gray-500">
                             {record.email}
                         </div>
