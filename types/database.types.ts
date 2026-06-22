@@ -359,64 +359,78 @@ export interface Database {
 
             // mentor_requests: migration v1 schema (no mentor_id/course_id FK columns)
             mentor_requests: {
-                Row: {
-                    id: string;
-                    requester_id: string | null;
-                    mentor_name: string;
-                    mentor_branch: string;
-                    mentor_birth_date: string | null;
-                    contact_info: string;
-                    reason: string;
-                    status: MentorRequestStatus;
-                    reviewed_by: string | null;
-                    reviewed_at: string | null;
-                    created_at: string;
-                    updated_at: string;
-                };
-                Insert: {
-                    id?: string;
-                    requester_id?: string | null;
-                    mentor_name: string;
-                    mentor_branch: string;
-                    mentor_birth_date?: string | null;
-                    contact_info: string;
-                    reason: string;
-                    status?: MentorRequestStatus;
-                    reviewed_by?: string | null;
-                    reviewed_at?: string | null;
-                    created_at?: string;
-                    updated_at?: string;
-                };
-                Update: {
-                    id?: string;
-                    requester_id?: string | null;
-                    mentor_name?: string;
-                    mentor_branch?: string;
-                    mentor_birth_date?: string | null;
-                    contact_info?: string;
-                    reason?: string;
-                    status?: MentorRequestStatus;
-                    reviewed_by?: string | null;
-                    reviewed_at?: string | null;
-                    updated_at?: string;
-                };
-                Relationships: [
-                    {
-                        foreignKeyName: 'mentor_requests_requester_id_fkey';
-                        columns: ['requester_id'];
-                        isOneToOne: false;
-                        referencedRelation: 'users';
-                        referencedColumns: ['id'];
-                    },
-                    {
-                        foreignKeyName: 'mentor_requests_reviewed_by_fkey';
-                        columns: ['reviewed_by'];
-                        isOneToOne: false;
-                        referencedRelation: 'users';
-                        referencedColumns: ['id'];
-                    },
-                ];
-            };
+    Row: {
+        id: string;
+        requester_id: string | null;
+        mentor_id: string;
+        course_id: string;
+
+        status: MentorRequestStatus;
+
+        reviewed_by: string | null;
+        reviewed_at: string | null;
+
+        created_at: string;
+        updated_at: string;
+    };
+    Insert: {
+        id?: string;
+        requester_id?: string | null;
+        mentor_id: string;
+        course_id: string;
+
+        status?: MentorRequestStatus;
+
+        reviewed_by?: string | null;
+        reviewed_at?: string | null;
+
+        created_at?: string;
+        updated_at?: string;
+    };
+    Update: {
+        id?: string;
+        requester_id?: string | null;
+        mentor_id?: string;
+        course_id?: string;
+
+        status?: MentorRequestStatus;
+
+        reviewed_by?: string | null;
+        reviewed_at?: string | null;
+
+        updated_at?: string;
+    };
+    Relationships: [
+        {
+            foreignKeyName: 'mentor_requests_requester_id_fkey';
+            columns: ['requester_id'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+            isOneToOne: false;
+        },
+        {
+            foreignKeyName: 'mentor_requests_mentor_id_fkey';
+            columns: ['mentor_id'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+            isOneToOne: false;
+        },
+        {
+            foreignKeyName: 'mentor_requests_course_id_fkey';
+            columns: ['course_id'];
+            referencedRelation: 'courses';
+            referencedColumns: ['id'];
+            isOneToOne: false;
+        },
+        {
+            foreignKeyName: 'mentor_requests_reviewed_by_fkey';
+            columns: ['reviewed_by'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+            isOneToOne: false;
+        }
+    ];
+}
 
             // conversations: migration v2 — user_a_id / user_b_id (không có course_id)
             conversations: {

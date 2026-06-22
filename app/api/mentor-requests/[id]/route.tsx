@@ -1,21 +1,31 @@
 import { NextRequest } from 'next/server';
 import { apiFailure, apiSuccess } from '@/lib/api/api-response';
 import { ApiError } from '@/lib/api/api-error';
-import { readJsonBody, requireString } from '@/lib/api/validation';
+import { readJsonBody } from '@/lib/api/validation';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import { Database } from '@/types/database.types';
 
+/* =====================================================
+   ROUTE CONTEXT (FIXED: params is Promise in Next.js)
+===================================================== */
 type RouteContext = {
     params: Promise<{ id: string }>;
 };
 
+type MentorRequestRow =
+    Database['public']['Tables']['mentor_requests']['Row'];
+
 type MentorRequestUpdate =
     Database['public']['Tables']['mentor_requests']['Update'];
 
-type MentorRequestStatus =
-    Database['public']['Tables']['mentor_requests']['Row']['status'];
+type MentorRequestStatus = MentorRequestRow['status'];
 
+/* =====================================================
+   ERROR HANDLER
+===================================================== */
 function handleError(error: unknown) {
+    console.error('[mentor_requests error]', error);
+
     if (error instanceof ApiError) {
         return apiFailure(error.message, error.status, error.details);
     }
@@ -27,45 +37,90 @@ function handleError(error: unknown) {
     );
 }
 
-function mapRequest(row: any) {
-    return {
-        id: row.id,
-        requesterId: row.requester_id,
-        mentorName: row.mentor_name,
-        mentorBranch: row.mentor_branch,
-        mentorBirthDate: row.mentor_birth_date ?? null,
-        contactInfo: row.contact_info,
-        reason: row.reason,
-        status: row.status,
-        reviewedBy: row.reviewed_by ?? null,
-        reviewedAt: row.reviewed_at ?? null,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-    };
-}
-
+/* =====================================================
+   FULL SELECT
+===================================================== */
 const SELECT = `
     id,
     requester_id,
-    mentor_name,
-    mentor_branch,
-    mentor_birth_date,
-    contact_info,
-    reason,
+    mentor_id,
+    course_id,
     status,
-    reviewed_by,
-    reviewed_at,
     created_at,
-    updated_at
+    updated_at,
+
+    requester:users!mentor_requests_requester_id_fkey (
+        id,
+        full_name,
+        email,
+        avatar_url,
+        phone
+    ),
+
+    mentor:users!mentor_requests_mentor_id_fkey (
+        id,
+        full_name,
+        email,
+        avatar_url,
+        phone
+    ),
+
+    course:courses (
+        id,
+        code,
+        name,
+        description
+    )
 `;
 
-/* =========================
-   GET
-========================= */
-export async function GET(
-    _req: NextRequest,
-    context: RouteContext
-) {
+/* =====================================================
+   MAPPER
+===================================================== */
+function mapRequest(row: any) {
+    if (!row) return null;
+
+    return {
+        id: row.id,
+        status: row.status,
+
+        createdAt: row.created_at,
+        updatedAt: row.updated_at ?? null,
+
+        requester: row.requester
+            ? {
+                  id: row.requester.id,
+                  name: row.requester.full_name,
+                  email: row.requester.email,
+                  avatar: row.requester.avatar_url,
+                  phone: row.requester.phone,
+              }
+            : null,
+
+        mentor: row.mentor
+            ? {
+                  id: row.mentor.id,
+                  name: row.mentor.full_name,
+                  email: row.mentor.email,
+                  avatar: row.mentor.avatar_url,
+                  phone: row.mentor.phone,
+              }
+            : null,
+
+        course: row.course
+            ? {
+                  id: row.course.id,
+                  code: row.course.code,
+                  name: row.course.name,
+                  description: row.course.description,
+              }
+            : null,
+    };
+}
+
+/* =====================================================
+   GET BY ID
+===================================================== */
+export async function GET(_req: NextRequest, context: RouteContext) {
     try {
         const { id } = await context.params;
 
@@ -75,9 +130,10 @@ export async function GET(
             .from('mentor_requests')
             .select(SELECT)
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
-        if (error) throw error;
+        if (error) throw new ApiError(error.message, 500, error);
+        if (!data) throw new ApiError('Mentor request not found', 404);
 
         return apiSuccess(mapRequest(data));
     } catch (error) {
@@ -85,66 +141,31 @@ export async function GET(
     }
 }
 
-/* =========================
-   PATCH
-========================= */
-export async function PATCH(
-    request: NextRequest,
-    context: RouteContext
-) {
+/* =====================================================
+   PATCH (approve / reject)
+===================================================== */
+export async function PATCH(request: NextRequest, context: RouteContext) {
     try {
         const { id } = await context.params;
 
         const admin = getSupabaseAdminClient();
 
         const body = await readJsonBody<{
-            action?: 'approve' | 'reject';
-            reviewedBy?: string;
-            mentorName?: string;
-            mentorBranch?: string;
-            mentorBirthDate?: string;
-            contactInfo?: string;
-            reason?: string;
+            action: 'approve' | 'reject';
+            reviewedBy: string;
         }>(request);
 
-        const updatePayload: MentorRequestUpdate = {};
+        const updatePayload: MentorRequestUpdate = {
+            reviewed_by: body.reviewedBy,
+            reviewed_at: new Date().toISOString(),
+        };
 
         if (body.action === 'approve') {
             updatePayload.status = 'approved' as MentorRequestStatus;
-            updatePayload.reviewed_by = body.reviewedBy ?? null;
-            updatePayload.reviewed_at = new Date().toISOString();
         }
 
-        else if (body.action === 'reject') {
+        if (body.action === 'reject') {
             updatePayload.status = 'rejected' as MentorRequestStatus;
-            updatePayload.reviewed_by = body.reviewedBy ?? null;
-            updatePayload.reviewed_at = new Date().toISOString();
-        }
-
-        else {
-            if (body.mentorName !== undefined) {
-                updatePayload.mentor_name = requireString(body.mentorName, 'mentorName');
-            }
-
-            if (body.mentorBranch !== undefined) {
-                updatePayload.mentor_branch = body.mentorBranch;
-            }
-
-            if (body.mentorBirthDate !== undefined) {
-                updatePayload.mentor_birth_date = body.mentorBirthDate;
-            }
-
-            if (body.contactInfo !== undefined) {
-                updatePayload.contact_info = body.contactInfo;
-            }
-
-            if (body.reason !== undefined) {
-                updatePayload.reason = body.reason;
-            }
-        }
-
-        if (Object.keys(updatePayload).length === 0) {
-            throw new ApiError('No update fields provided.', 400);
         }
 
         const { data, error } = await admin
@@ -152,9 +173,10 @@ export async function PATCH(
             .update(updatePayload)
             .eq('id', id)
             .select(SELECT)
-            .single();
+            .maybeSingle();
 
-        if (error) throw error;
+        if (error) throw new ApiError(error.message, 500, error);
+        if (!data) throw new ApiError('Mentor request not found', 404);
 
         return apiSuccess(mapRequest(data));
     } catch (error) {
@@ -162,13 +184,10 @@ export async function PATCH(
     }
 }
 
-/* =========================
+/* =====================================================
    DELETE
-========================= */
-export async function DELETE(
-    _req: NextRequest,
-    context: RouteContext
-) {
+===================================================== */
+export async function DELETE(_req: NextRequest, context: RouteContext) {
     try {
         const { id } = await context.params;
 
@@ -179,7 +198,7 @@ export async function DELETE(
             .delete()
             .eq('id', id);
 
-        if (error) throw error;
+        if (error) throw new ApiError(error.message, 500, error);
 
         return apiSuccess({ deleted: true });
     } catch (error) {
